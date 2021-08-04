@@ -1,3 +1,5 @@
+This is not the original Polyrhythm Mania game. This is a WIP Spanish Translation of that. You can find the original [here.](https://github.com/chrislo27/PolyrhythmMania)
+
 # Polyrhythm Mania (WIP)
 A game that faithfully recreates the *Polyrhythm* minigame from Rhythm Tengoku (リズム天国), with a 
 built-in level editor.
