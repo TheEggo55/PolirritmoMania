@@ -37,6 +37,7 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
     val creditsMenu: CreditsMenu = CreditsMenu(this)
     val playMenu: PlayMenu = PlayMenu(this)
     val practiceMenu: PracticeMenu = PracticeMenu(this)
+    val endlessMenu: EndlessModeMenu = EndlessModeMenu(this)
     val settingsMenu: SettingsMenu = SettingsMenu(this)
     val audioSettingsMenu: AudioSettingsMenu = AudioSettingsMenu(this)
     val videoSettingsMenu: VideoSettingsMenu = VideoSettingsMenu(this)
@@ -56,6 +57,7 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
         addMenu(creditsMenu)
         addMenu(playMenu)
         addMenu(practiceMenu)
+        addMenu(endlessMenu)
         addMenu(settingsMenu)
         addMenu(videoSettingsMenu)
         addMenu(audioSettingsMenu)
@@ -126,7 +128,7 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
             
             RectangleStack.pop()
         }
-        menus.forEach { it.visible.set(false) }
+        menus.forEach { if (it !== menu) it.visible.set(false) }
         menu.visible.set(true)
         (activeMenu as Var).set(menu)
     }

@@ -10,9 +10,15 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Matrix4
 import com.badlogic.gdx.utils.Align
+import com.badlogic.gdx.utils.Disposable
+import com.badlogic.gdx.utils.StreamUtils
+import net.beadsproject.beads.ugens.CrossFade
+import net.beadsproject.beads.ugens.SamplePlayer
 import paintbox.Paintbox
+import paintbox.binding.FloatVar
 import paintbox.binding.ReadOnlyVar
 import paintbox.binding.Var
+import paintbox.binding.VarChangedListener
 import paintbox.font.Markup
 import paintbox.font.TextAlign
 import paintbox.font.TextRun
@@ -28,6 +34,7 @@ import paintbox.util.gdxutils.disposeQuietly
 import paintbox.util.gdxutils.drawQuad
 import paintbox.util.gdxutils.fillRect
 import paintbox.util.gdxutils.grey
+import paintbox.util.settableLazy
 import polyrhythmmania.Localization
 import polyrhythmmania.PRMania
 import polyrhythmmania.PRManiaGame
@@ -38,17 +45,18 @@ import polyrhythmmania.discordrpc.DiscordHelper
 import polyrhythmmania.screen.mainmenu.menu.InputSettingsMenu
 import polyrhythmmania.screen.mainmenu.menu.MenuCollection
 import polyrhythmmania.screen.mainmenu.menu.UppermostMenu
+import polyrhythmmania.soundsystem.BeadsMusic
 import polyrhythmmania.soundsystem.SimpleTimingProvider
+import polyrhythmmania.soundsystem.SoundSystem
+import polyrhythmmania.soundsystem.beads.ugen.Bandpass
+import polyrhythmmania.soundsystem.sample.DecodingMusicSample
+import polyrhythmmania.soundsystem.sample.GdxAudioReader
+import polyrhythmmania.soundsystem.sample.MusicSamplePlayer
 import polyrhythmmania.world.entity.EntityCube
 import polyrhythmmania.world.entity.EntityPiston
 import polyrhythmmania.world.entity.EntityPlatform
-import polyrhythmmania.world.tileset.CustomTexturePack
-import polyrhythmmania.world.tileset.StockTexturePacks
-import java.io.File
-import java.nio.file.Files
-import java.util.zip.ZipOutputStream
-import kotlin.io.path.absolutePathString
-import kotlin.io.path.outputStream
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import kotlin.math.ceil
 
 
@@ -159,6 +167,38 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
      * The current framebuffer is what's drawn for this frame.
      */
     private lateinit var framebufferCurrent: FrameBuffer
+
+    // Music related ----------------------------------------------------------------------------------------------
+    private val menuMusicVolume: FloatVar = FloatVar { 
+        main.settings.menuMusicVolume.use() / 100f
+    }
+    private val musicSample: DecodingMusicSample
+    private val beadsMusic: BeadsMusic
+    private var shouldBeBandpass: Boolean = false
+    var soundSys: SoundSys by settableLazy {
+        SoundSys().apply {
+            musicPlayer.pause(true)
+        }
+    }
+
+    init {
+        val unpausedPlayer = AtomicBoolean(false)
+        val (sample, handler) = GdxAudioReader.newDecodingMusicSample(Gdx.files.internal("music/Title_ABC.ogg")) { _, _ ->
+            if (!unpausedPlayer.get()) {
+                unpausedPlayer.set(true)
+                Gdx.app.postRunnable { 
+                    this.soundSys.musicPlayer.pause(false)
+                }
+            }
+        }
+        musicSample = sample
+        thread(start = true, isDaemon = true, name = "Main Menu music decoder", priority = 8) {
+            Paintbox.LOGGER.debug("Starting main menu music decode")
+            handler.decode()
+            Paintbox.LOGGER.debug("Finished main menu music decode")
+        }
+        beadsMusic = BeadsMusic(musicSample)
+    }
 
     init {
         val startingWidth = Gdx.graphics.width
@@ -283,6 +323,24 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         }
     }
 
+    init {
+        soundSys.start()
+
+        menuMusicVolume.addListener {
+            this.soundSys.soundSystem.audioContext.out.gain = it.getOrCompute()
+        }
+        
+        val visibleListener: VarChangedListener<Boolean> = VarChangedListener { v ->
+            if (v.getOrCompute()) {
+                soundSys.fadeToNormal()
+            } else {
+                soundSys.fadeToBandpass()
+            }
+        }
+        menuCollection.uppermostMenu.visible.addListener(visibleListener)
+        menuCollection.audioSettingsMenu.visible.addListener(visibleListener)
+    }
+
     override fun render(delta: Float) {
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
@@ -395,16 +453,23 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
     override fun renderUpdate() {
         super.renderUpdate()
+//        if (Gdx.input.isKeyJustPressed(Input.Keys.I)) {
+//            crossFade.fadeTo(musicPlayer, 1000f)
+//        }
+//        if (Gdx.input.isKeyJustPressed(Input.Keys.O)) {
+//            crossFade.fadeTo(bandpassGain, 1000f)
+//        }
         // DEBUG remove later 
-        if (Paintbox.debugMode && Paintbox.stageOutlines != Paintbox.StageOutlineMode.NONE && Gdx.input.isKeyJustPressed(Input.Keys.R)) {
-            main.screen = MainMenuScreen(main)
-        }
+//        if (Paintbox.debugMode && Paintbox.stageOutlines != Paintbox.StageOutlineMode.NONE && Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+//            main.screen = MainMenuScreen(main)
+//        }
     }
 
     fun transitionAway(action: () -> Unit) {
         flipAnimation = TileFlip(0, 0, tilesWidth, tilesHeight, cornerStart = Corner.TOP_LEFT)
         this.transitionAway = action
         main.inputMultiplexer.removeProcessor(processor)
+        soundSys.fadeMusicToSilent()
     }
 
     fun prepareShow(doFlipAnimation: Boolean = false): MainMenuScreen {
@@ -482,28 +547,16 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         main.inputMultiplexer.addProcessor(processor)
         sceneRoot.cancelTooltip()
         
+        soundSys.soundSystem.setPaused(false)
+        soundSys.resetMusic()
+
         DiscordHelper.updatePresence(DefaultPresences.Idle)
-        
-        // TODO remove this
-//        CustomTexturePack("test", "gba").apply { 
-//            StockTexturePacks.hd.getAllTilesetRegions().forEach { tr ->
-//                this.add(tr)
-//            }
-//            val file = File.createTempFile("prmania", "testtexpack.zip").apply { 
-//                deleteOnExit()
-//            }
-//            file.outputStream().use { fos ->
-//                ZipOutputStream(fos).use { zip ->
-//                    this.writeToOutputStream(zip)
-//                }
-//            }
-//            println("Wrote test texture pack to ${file.absolutePath}")
-//        }
     }
 
     override fun hide() {
         super.hide()
         main.inputMultiplexer.removeProcessor(processor)
+        soundSys.soundSystem.setPaused(true)
     }
 
     override fun resize(width: Int, height: Int) {
@@ -516,6 +569,9 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
     override fun dispose() {
         framebufferOld.disposeQuietly()
         framebufferCurrent.disposeQuietly()
+        soundSys.shutdown()
+        soundSys.disposeQuietly()
+        StreamUtils.closeQuietly(musicSample)
     }
 
     override fun keyDown(keycode: Int): Boolean {
@@ -538,6 +594,69 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         return "" +
                 """path: ${sceneRoot.mainLayer.lastHoveredElementPath.map { "${it::class.java.simpleName}" }}
 currentMenu: ${menuCollection.activeMenu.getOrCompute()?.javaClass?.simpleName}
+soundSysPaused: ${soundSys.soundSystem.isPaused} / player: ${soundSys.musicPlayer.isPaused}
+playerPos: ${soundSys.musicPlayer.position}
 """
+    }
+    
+    inner class SoundSys : Disposable {
+        val soundSystem: SoundSystem = SoundSystem.createDefaultSoundSystem().apply {
+            this.setPaused(true)
+            this.audioContext.out.gain = menuMusicVolume.get()
+        }
+        val musicPlayer: MusicSamplePlayer = beadsMusic.createPlayer(soundSystem.audioContext).also { player ->
+            val sample = musicSample
+            player.loopStartMs = sample.samplesToMs(123_381.0).toFloat()
+            player.loopEndMs = sample.samplesToMs(8_061_382.0).toFloat()
+            player.loopType = SamplePlayer.LoopType.LOOP_FORWARDS
+        }
+        val bandpass: Bandpass = Bandpass(soundSystem.audioContext, musicPlayer.outs, musicPlayer.outs)
+        val crossFade: CrossFade = CrossFade(soundSystem.audioContext, if (shouldBeBandpass) bandpass else musicPlayer)
+        
+        init {
+            bandpass.addInput(musicPlayer)
+            
+            soundSystem.audioContext.out.addInput(crossFade)
+        }
+        
+        fun start() {
+            soundSystem.setPaused(false)
+            soundSystem.startRealtime()
+        }
+        
+        fun shutdown() {
+            soundSystem.setPaused(true)
+            soundSystem.stopRealtime()
+        }
+        
+        fun fadeToBandpass(durationMs: Float = 1000f) {
+            shouldBeBandpass = true
+            crossFade.fadeTo(bandpass, durationMs)
+        }
+        
+        fun fadeToNormal(durationMs: Float = 1000f) {
+            shouldBeBandpass = false
+            crossFade.fadeTo(musicPlayer, durationMs)
+        }
+        
+        fun resetMusic() {
+            musicPlayer.gain = 1f
+            musicPlayer.position = 0.0
+            fadeToNormal(1f)
+        }
+        
+        fun fadeMusicToSilent() {
+            Gdx.app.postRunnable { // FIXME this is hacky...
+                musicPlayer.gain = 0.5f
+                Gdx.app.postRunnable {
+                    musicPlayer.gain = 0f
+                }
+            }
+        }
+
+        override fun dispose() {
+            shutdown()
+            soundSystem.dispose()
+        }
     }
 }

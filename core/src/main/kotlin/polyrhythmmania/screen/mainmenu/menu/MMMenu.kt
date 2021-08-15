@@ -218,9 +218,10 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
 
     protected fun <T> createCycleOption(items: List<T>, firstItem: T,
                                         labelText: Var.Context.() -> String, font: PaintboxFont = this.font,
-                                       percentageContent: Float = 0.5f): Pair<SettingsOptionPane, CycleControl<T>> {
+                                        percentageContent: Float = 0.5f,
+                                        itemToString: (T) -> String = { it.toString() }): Pair<SettingsOptionPane, CycleControl<T>> {
         val settingsOptionPane = createSettingsOption(labelText, font, percentageContent)
-        val cycle = CycleControl<T>(settingsOptionPane, items, firstItem)
+        val cycle = CycleControl<T>(settingsOptionPane, items, firstItem, itemToString)
         settingsOptionPane.content += cycle
 
         return settingsOptionPane to cycle
@@ -237,7 +238,7 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
                     val main = mainMenu.main
                     Gdx.app.postRunnable {
                         val sidemode: SideMode = factory.invoke(main, main.settings.inputKeymapKeyboard.getOrCompute().copy())
-                        val playScreen = PlayScreen(main, sidemode.container, challenges = challenges, showResults = showResults)
+                        val playScreen = PlayScreen(main, sidemode, sidemode.container, challenges = challenges, showResults = showResults)
                         main.screen = TransitionScreen(main, main.screen, playScreen, null, FadeIn(0.25f, Color(0f, 0f, 0f, 1f))).apply {
                             this.onEntryEnd = {
                                 sidemode.prepare()
@@ -291,7 +292,8 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
         }
     }
     
-    class CycleControl<T>(settingsOptionPane: SettingsOptionPane, val list: List<T>, firstItem: T)
+    class CycleControl<T>(settingsOptionPane: SettingsOptionPane, val list: List<T>, firstItem: T,
+                val itemToString: (T) -> String = { it.toString() })
         : Pane(), HasPressedState by HasPressedState.DefaultImpl() {
         
         val left: Button
@@ -331,7 +333,7 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
                     currentItem.set(list[nextIndex])
                 }
             }
-            label = TextLabel(binding = {currentItem.use().toString()}, font = settingsOptionPane.font).apply {
+            label = TextLabel(binding = { itemToString(currentItem.use()) }, font = settingsOptionPane.font).apply {
                 Anchor.Centre.configure(this)
                 this.bindWidthToParent { -(bounds.height.useF() * 2) }
                 this.textColor.bind { settingsOptionPane.textColorVar.use() }

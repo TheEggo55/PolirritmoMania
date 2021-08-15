@@ -74,14 +74,15 @@ class EngineInputter(val engine: Engine) {
         val score: Var<Int> = Var(0)
         var highScore: Var<Int> = Var(0)
         val maxLives: Var<Int> = Var(0)
-        val lives: Var<Int> = Var(maxLives.getOrCompute())
+        val startingLives: Var<Int> = Var.bind { maxLives.use() }
+        val lives: Var<Int> = Var(startingLives.getOrCompute())
         
         val gameOverSeconds: FloatVar = FloatVar(Float.MAX_VALUE)
         val gameOverUIShown: Var<Boolean> = Var(false)
         
         fun reset() {
             score.set(0)
-            lives.set(maxLives.getOrCompute())
+            lives.set(startingLives.getOrCompute())
             gameOverSeconds.set(Float.MAX_VALUE)
             gameOverUIShown.set(false)
         }
@@ -158,7 +159,7 @@ class EngineInputter(val engine: Engine) {
         val atBeat = engine.tempos.secondsToBeats(atSeconds)
         
         val worldMode = world.worldMode
-        if (worldMode == WorldMode.POLYRHYTHM) {
+        if (worldMode == WorldMode.POLYRHYTHM || worldMode == WorldMode.POLYRHYTHM_ENDLESS) {
             val rowBlockType: EntityPiston.Type = when (type) {
                 InputType.A -> EntityPiston.Type.PISTON_A
                 InputType.DPAD -> EntityPiston.Type.PISTON_DPAD
@@ -317,9 +318,11 @@ class EngineInputter(val engine: Engine) {
         val validResults = inputTracker.results.filter { it.inputScore != InputScore.MISS }
         
         totalExpectedInputs += numExpected
-        (inputResults as MutableList).addAll(validResults)
+        if (!world.worldMode.showEndlessScore) {
+            (inputResults as MutableList).addAll(validResults)
+        }
         
-        if (noMiss) {
+        if (noMiss && !rod.registeredMiss) {
             if ((rod.exploded && numExpected > 0) || (numExpected > validResults.size) || inputTracker.results.any { it.inputScore == InputScore.MISS }) {
                 missed()
             }
@@ -339,14 +342,21 @@ class EngineInputter(val engine: Engine) {
         }
 
         val worldMode = world.worldMode
-        if (worldMode.showEndlessScore) {
-            val endlessScore = this.endlessScore
-            val oldScore = endlessScore.lives.getOrCompute()
-            val newScore = (oldScore - 1).coerceIn(0, endlessScore.maxLives.getOrCompute())
-            endlessScore.lives.set(newScore)
-            if (oldScore > 0 && newScore == 0) {
-                onGameOver()
+        when (worldMode) {
+            WorldMode.DUNK -> {
+                triggerLifeLost()
             }
+            else -> {}
+        }
+    }
+    
+    fun triggerLifeLost() {
+        val endlessScore = this.endlessScore
+        val oldScore = endlessScore.lives.getOrCompute()
+        val newScore = (oldScore - 1).coerceIn(0, endlessScore.maxLives.getOrCompute())
+        endlessScore.lives.set(newScore)
+        if (oldScore > 0 && newScore == 0) {
+            onGameOver()
         }
     }
     

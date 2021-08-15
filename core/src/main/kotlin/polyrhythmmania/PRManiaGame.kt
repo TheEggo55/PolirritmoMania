@@ -3,6 +3,7 @@ package polyrhythmmania
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.Preferences
+import com.badlogic.gdx.Screen
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics
 import com.badlogic.gdx.graphics.Color
@@ -13,10 +14,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator
 import com.badlogic.gdx.utils.Align
 import com.eclipsesource.json.Json
 import org.lwjgl.glfw.GLFW
-import paintbox.Paintbox
-import paintbox.PaintboxGame
-import paintbox.PaintboxSettings
-import paintbox.ResizeAction
+import paintbox.*
 import paintbox.binding.ReadOnlyVar
 import paintbox.binding.Var
 import paintbox.font.*
@@ -37,6 +35,7 @@ import polyrhythmmania.init.TilesetAssetLoader
 import polyrhythmmania.screen.CrashScreen
 import polyrhythmmania.screen.mainmenu.MainMenuScreen
 import polyrhythmmania.sidemodes.SidemodeAssets
+import polyrhythmmania.soundsystem.SoundSystem
 import polyrhythmmania.ui.PRManiaSkins
 import polyrhythmmania.util.DumpPackedSheets
 import polyrhythmmania.util.LelandSpecialChars
@@ -76,6 +75,7 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
     // Permanent screens
     lateinit var mainMenuScreen: MainMenuScreen
         private set
+    private val permanentScreens: MutableList<PaintboxScreen> = mutableListOf()
     
     val githubVersion: ReadOnlyVar<Version> = Var(Version.ZERO)
 
@@ -96,6 +96,23 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
         PRManiaSkins
         settings = Settings(this, preferences).apply { 
             load()
+            val mixerHandler = SoundSystem.defaultMixerHandler
+            val mixerString = this.mixer.getOrCompute()
+            if (mixerString.isNotEmpty()) {
+                val found = mixerHandler.supportedMixers.find {
+                    it.mixerInfo.name == mixerString
+                }
+                if (found != null) {
+                    Paintbox.LOGGER.info("Attaching to mixer from settings: ${found.mixerInfo.name}")
+                    mixerHandler.recommendedMixer = found
+                } else {
+                    Paintbox.LOGGER.warn("Could not find mixer from settings: settings = $mixerString")
+                }
+            } else {
+                val mixerName = mixerHandler.recommendedMixer.mixerInfo.name
+                this.mixer.set(mixerName)
+                Paintbox.LOGGER.info("No saved mixer string, using $mixerName")
+            }
         }
 
         AssetRegistry.addAssetLoader(InitialAssetLoader())
@@ -114,6 +131,7 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
         
         fun initializeScreens() {
             mainMenuScreen = MainMenuScreen(this)
+            permanentScreens.add(mainMenuScreen)
         }
         setScreen(AssetRegistryLoadingScreen(this).apply {
             onStart = {
@@ -192,6 +210,9 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
         colourPickerHueBar.disposeQuietly()
         colourPickerTransparencyGrid.disposeQuietly()
         SidemodeAssets.disposeQuietly()
+        permanentScreens.forEach { s ->
+            s.disposeQuietly()
+        }
         try {
             val expiry = System.currentTimeMillis() - (7L * 24 * 60 * 60 * 1000)
             PRMania.RECOVERY_FOLDER.listFiles()?.filter { f ->
