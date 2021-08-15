@@ -9,6 +9,9 @@ object PreferenceKeys {
     val FILE_CHOOSER_EDITOR_SAVE = "fileChooser_editor_save"
     val FILE_CHOOSER_EDITOR_LOAD = "fileChooser_editor_open"
     val FILE_CHOOSER_PLAY_SAVED_LEVEL = "fileChooser_play_savedLevel"
+    val FILE_CHOOSER_TEXPACK_EXPORT_TO_DIR = "fileChooser_texpack_exportToDirectory"
+    val FILE_CHOOSER_TEXPACK_IMPORT_TEX_TO_DIR = "fileChooser_texpack_importTexturesToDirectory"
+    val FILE_CHOOSER_TEXPACK_ENTIRE = "fileChooser_texpack_saveLoadEntire"
     
     val SETTINGS_GAMEPLAY_VOLUME = "settings_gameplay_volume"
     val SETTINGS_MENU_MUSIC_VOLUME = "settings_menu_volume_music"
@@ -19,6 +22,7 @@ object PreferenceKeys {
     val SETTINGS_SHOW_SKILL_STAR = "settings_showSkillStar"
     val SETTINGS_MUSIC_OFFSET_MS = "settings_musicOffsetMs"
     val SETTINGS_DISCORD_RPC = "settings_discord_rich_presence"
+    val SETTINGS_MIXER = "settings_mixer"
     
     val EDITORSETTINGS_DETAILED_MARKER_UNDO = "editorsettings_detailed_marker_undo"
     val EDITORSETTINGS_CAMERA_PAN_ON_DRAG_EDGE = "editorsettings_camera_pan_on_drag_edge"
@@ -31,5 +35,7 @@ object PreferenceKeys {
     val KEYMAP_KEYBOARD = "keymap_keyboard"
     
     val ENDLESS_DUNK_HIGHSCORE = "endlessMode_dunk_highScore"
+    val ENDLESS_DAILY_CHALLENGE = "endlessMode_dailyChallenge"
+    
     
 }
