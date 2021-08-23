@@ -7,11 +7,13 @@ import com.badlogic.gdx.graphics.*
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.graphics.glutils.FrameBuffer
-import com.badlogic.gdx.math.MathUtils
+import com.badlogic.gdx.graphics.glutils.HdpiUtils
 import com.badlogic.gdx.math.Matrix4
 import com.badlogic.gdx.utils.Align
 import com.badlogic.gdx.utils.Disposable
 import com.badlogic.gdx.utils.StreamUtils
+import com.badlogic.gdx.utils.viewport.FitViewport
+import com.badlogic.gdx.utils.viewport.Viewport
 import net.beadsproject.beads.ugens.CrossFade
 import net.beadsproject.beads.ugens.SamplePlayer
 import paintbox.Paintbox
@@ -31,33 +33,32 @@ import paintbox.ui.layout.VBox
 import paintbox.util.Version
 import paintbox.util.WindowSize
 import paintbox.util.gdxutils.disposeQuietly
-import paintbox.util.gdxutils.drawQuad
 import paintbox.util.gdxutils.fillRect
 import paintbox.util.gdxutils.grey
 import paintbox.util.settableLazy
+import paintbox.util.viewport.ExtendFixedRatioViewport
 import polyrhythmmania.Localization
 import polyrhythmmania.PRMania
 import polyrhythmmania.PRManiaGame
 import polyrhythmmania.PRManiaScreen
-import polyrhythmmania.container.Container
 import polyrhythmmania.discordrpc.DefaultPresences
 import polyrhythmmania.discordrpc.DiscordHelper
+import polyrhythmmania.screen.mainmenu.bg.BgType
+import polyrhythmmania.screen.mainmenu.bg.MainMenuBg
 import polyrhythmmania.screen.mainmenu.menu.InputSettingsMenu
+import polyrhythmmania.screen.mainmenu.menu.MMMenu
 import polyrhythmmania.screen.mainmenu.menu.MenuCollection
 import polyrhythmmania.screen.mainmenu.menu.UppermostMenu
 import polyrhythmmania.soundsystem.BeadsMusic
-import polyrhythmmania.soundsystem.SimpleTimingProvider
 import polyrhythmmania.soundsystem.SoundSystem
 import polyrhythmmania.soundsystem.beads.ugen.Bandpass
 import polyrhythmmania.soundsystem.sample.DecodingMusicSample
 import polyrhythmmania.soundsystem.sample.GdxAudioReader
 import polyrhythmmania.soundsystem.sample.MusicSamplePlayer
-import polyrhythmmania.world.entity.EntityCube
-import polyrhythmmania.world.entity.EntityPiston
-import polyrhythmmania.world.entity.EntityPlatform
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 
 class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
@@ -124,24 +125,31 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         this.setToOrtho(false, 1280f, 720f)
         this.update()
     }
+    private val uiViewport: Viewport = FitViewport(uiCamera.viewportWidth, uiCamera.viewportHeight, uiCamera)
+
+    /**
+     * Used for frame buffer
+     */
     private val fullCamera: OrthographicCamera = OrthographicCamera().apply {
-        this.setToOrtho(false, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
+        this.setToOrtho(false, 1280f, 720f)
         this.update()
     }
+    private val fullViewport: Viewport = ExtendFixedRatioViewport(1280f, 720f, fullCamera)
 
     val pendingKeyboardBinding: Var<InputSettingsMenu.PendingKeyboardBinding?> = Var(null)
 
     private val batch: SpriteBatch = main.batch
-    private val sceneRoot: SceneRoot = SceneRoot(uiCamera)
+    private val sceneRoot: SceneRoot = SceneRoot(uiViewport).apply { 
+        this.applyViewport.set(false) // Must be disabled due to being rendered to a framebuffer
+    }
     private val processor: InputProcessor = sceneRoot.inputSystem
+    
+    var backgroundType: BgType = BgType.NORMAL
+    private val background: MainMenuBg = MainMenuBg(this)
 
-    private val container: Container = Container(null, SimpleTimingProvider { throw it })
-
+    private val logoImage: ImageNode
     private val menuPane: Pane = Pane()
     val menuCollection: MenuCollection = MenuCollection(this, sceneRoot, menuPane)
-
-    private val gradientStart: Color = Color(0f, 32f / 255f, 55f / 255f, 1f)
-    private val gradientEnd: Color = Color.BLACK.cpy()
 
     // Related to tile flip effect --------------------------------------------------------
 
@@ -208,49 +216,6 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         } else {
             createFramebuffers(PRMania.WIDTH, PRMania.HEIGHT, null)
         }
-
-        val world = container.world
-        val renderer = container.renderer
-        world.clearEntities()
-        renderer.camera.position.x = -2f
-        renderer.camera.position.y = 0.5f
-
-        // TODO move this out
-        for (x in 0 until 7) {
-            for (z in -2..0) {
-                world.addEntity(EntityCube(world, withLine = false, withBorder = z == 0).apply {
-                    this.position.set(x.toFloat(), 0f, z.toFloat())
-                })
-            }
-            val y = 1f + MathUtils.FLOAT_ROUNDING_ERROR * 1
-            if (x == 0) {
-                world.addEntity(EntityPiston(world).apply {
-                    this.type = EntityPiston.Type.PISTON_A
-                    this.position.set(x.toFloat(), y, -1f)
-                })
-            } else {
-                world.addEntity(EntityPlatform(world).apply {
-                    this.position.set(x.toFloat(), y, -1f)
-                })
-            }
-        }
-        run {
-            world.addEntity(EntityCubeHovering(world).apply {
-                this.position.set(-2f, 2f, -3f)
-            })
-            world.addEntity(EntityCubeHovering(world, withLine = true).apply {
-                this.position.set(2f, 2f, -4f)
-            })
-            world.addEntity(EntityCubeHovering(world).apply {
-                this.position.set(6f, 0f, -4f)
-            })
-            world.addEntity(EntityCubeHovering(world).apply {
-                this.position.set(-3.5f, 1f, 0f)
-            })
-            world.addEntity(EntityCubeHovering(world).apply {
-                this.position.set(0f, -2f, 1f)
-            })
-        }
     }
 
     init {
@@ -258,16 +223,16 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         val leftPane = Pane().apply {
             this.margin.set(Insets(64f))
         }
-        val logoImage = ImageNode(TextureRegion(AssetRegistry.get<Texture>("logo_2lines_en"))).apply {
+        logoImage = ImageNode(TextureRegion(AssetRegistry.get<Texture>("logo_2lines_en"))).apply {
             this.bounds.height.set(175f)
-//            this.margin.set(Insets(0f, 0f, 32f, 32f))
             this.bounds.y.set(24f)
             this.renderAlign.set(Align.topLeft)
+            this.visible.bind { (menuCollection.activeMenu.use() as? MMMenu)?.showLogo?.use() != false }
         }
         leftPane.addChild(logoImage)
         menuPane.apply {
             Anchor.BottomLeft.configure(this)
-            this.bindHeightToParent(-(logoImage.bounds.height.get() + logoImage.bounds.y.get() + 32f))
+//            this.bindHeightToParent(-(logoImage.bounds.height.get() + logoImage.bounds.y.get() + 32f))
         }
         leftPane.addChild(menuPane)
 
@@ -277,13 +242,27 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             this.spacing.set(0f)
             this.align.set(VBox.Align.BOTTOM)
             this.bounds.width.set(64f)
-            this.bounds.height.set(64f)
+            this.bounds.height.set(64f * 2)
         }
         bottomRight.temporarilyDisableLayouts {
             bottomRight += Button("").apply {
                 Anchor.BottomRight.configure(this)
-                this.bounds.width.set(32f)
-                this.bounds.height.set(32f)
+                this.bounds.width.set(48f)
+                this.bounds.height.set(48f)
+                this.skinID.set(UppermostMenu.BUTTON_SKIN_ID)
+                this += ImageNode(TextureRegion(AssetRegistry.get<Texture>("support_donate")))
+                this.setOnAction {
+                    Gdx.net.openURI(PRMania.DONATE_LINK)
+                }
+                val loc: ReadOnlyVar<String> = Localization.getVar("mainMenu.support.tooltip", Var { listOf(PRMania.DONATE_LINK) })
+                this.tooltipElement.set(Tooltip(binding = { loc.use() }, font = main.fontMainMenuMain).apply { 
+                    this.markup.set(markup)
+                })
+            }
+            bottomRight += Button("").apply {
+                Anchor.BottomRight.configure(this)
+                this.bounds.width.set(48f)
+                this.bounds.height.set(48f)
                 this.skinID.set(UppermostMenu.BUTTON_SKIN_ID)
                 this += ImageNode(TextureRegion(AssetRegistry.get<Texture>("github_mark")))
                 this.setOnAction {
@@ -320,6 +299,9 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             }, font = main.fontMainMenuMain).apply {
                 this.markup.set(markup)
             })
+            this.setOnAction { 
+                Gdx.net.openURI("${PRMania.GITHUB}/releases/latest")
+            }
         }
     }
 
@@ -358,21 +340,14 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
 
         // Render background
-        batch.projectionMatrix = camera.combined
-        batch.begin()
-
-        batch.drawQuad(-400f, 0f, gradientEnd, camera.viewportWidth, 0f, gradientEnd, camera.viewportWidth,
-                camera.viewportHeight, gradientStart, -400f, camera.viewportHeight + 400f, gradientStart)
-
-        batch.end()
-
-        // Render world
-        container.renderer.render(batch, container.engine)
+        HdpiUtils.glViewport(0, 0, boundFB.width, boundFB.height)
+        background.render(batch, camera)
 
         // Render UI
         batch.projectionMatrix = camera.combined
         batch.begin()
 
+        HdpiUtils.glViewport(0, 0, boundFB.width, boundFB.height)
         sceneRoot.renderAsRoot(batch)
 
         if (this.transitionAway != null) {
@@ -385,6 +360,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         boundFB.end()
 
         // Tile flip effect
+        fullViewport.apply()
         batch.projectionMatrix = camera.combined
         batch.begin()
         batch.setColor(1f, 1f, 1f, 1f)
@@ -474,8 +450,9 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
     fun prepareShow(doFlipAnimation: Boolean = false): MainMenuScreen {
         resetTiles()
-        menuCollection.changeActiveMenu(menuCollection.uppermostMenu, false, instant = true)
-        menuCollection.resetMenuStack()
+        // Uncomment 2 lines below to have it reset to the uppermostMenu each time
+//        menuCollection.changeActiveMenu(menuCollection.uppermostMenu, false, instant = true)
+//        menuCollection.resetMenuStack()
         if (doFlipAnimation) {
             // Black out old frame buffer
             lastProjMatrix.set(batch.projectionMatrix)
@@ -500,8 +477,9 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
     private fun updateFramebuffers() {
         val cachedFramebufferSize = this.framebufferSize
-        val width = Gdx.graphics.width
-        val height = Gdx.graphics.height
+        val viewport = fullViewport
+        val width = viewport.worldWidth.roundToInt()
+        val height = viewport.worldHeight.roundToInt()
         if (width > 0 && height > 0 && (cachedFramebufferSize.width != width || cachedFramebufferSize.height != height)) {
             createFramebuffers(width, height, Pair(framebufferOld, framebufferCurrent))
         }
@@ -551,6 +529,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         soundSys.resetMusic()
 
         DiscordHelper.updatePresence(DefaultPresences.Idle)
+        background.initializeFromType(this.backgroundType)
     }
 
     override fun hide() {
@@ -561,8 +540,8 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
     override fun resize(width: Int, height: Int) {
         super.resize(width, height)
-        fullCamera.setToOrtho(false, width.toFloat(), height.toFloat())
-        fullCamera.update()
+        fullViewport.update(width, height, true)
+        sceneRoot.resize()
         updateFramebuffers()
     }
 
@@ -600,7 +579,7 @@ playerPos: ${soundSys.musicPlayer.position}
     }
     
     inner class SoundSys : Disposable {
-        val soundSystem: SoundSystem = SoundSystem.createDefaultSoundSystem().apply {
+        val soundSystem: SoundSystem = SoundSystem.createDefaultSoundSystem(settings = SoundSystem.SoundSystemSettings(false)).apply {
             this.setPaused(true)
             this.audioContext.out.gain = menuMusicVolume.get()
         }
@@ -631,12 +610,12 @@ playerPos: ${soundSys.musicPlayer.position}
         
         fun fadeToBandpass(durationMs: Float = 1000f) {
             shouldBeBandpass = true
-            crossFade.fadeTo(bandpass, durationMs)
+//            crossFade.fadeTo(bandpass, durationMs) // Reimplement bandpass when needed.
         }
         
         fun fadeToNormal(durationMs: Float = 1000f) {
             shouldBeBandpass = false
-            crossFade.fadeTo(musicPlayer, durationMs)
+//            crossFade.fadeTo(musicPlayer, durationMs) // Reimplement bandpass when needed.
         }
         
         fun resetMusic() {
@@ -646,7 +625,7 @@ playerPos: ${soundSys.musicPlayer.position}
         }
         
         fun fadeMusicToSilent() {
-            Gdx.app.postRunnable { // FIXME this is hacky...
+            Gdx.app.postRunnable {
                 musicPlayer.gain = 0.5f
                 Gdx.app.postRunnable {
                     musicPlayer.gain = 0f
