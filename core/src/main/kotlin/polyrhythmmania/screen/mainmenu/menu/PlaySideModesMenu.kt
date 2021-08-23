@@ -1,5 +1,6 @@
 package polyrhythmmania.screen.mainmenu.menu
 
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
 import paintbox.binding.Var
 import paintbox.ui.Anchor
@@ -11,18 +12,18 @@ import paintbox.ui.layout.VBox
 import polyrhythmmania.Localization
 import polyrhythmmania.discordrpc.DefaultPresences
 import polyrhythmmania.discordrpc.DiscordHelper
+import polyrhythmmania.screen.mainmenu.bg.BgType
 import polyrhythmmania.sidemodes.DunkMode
 import polyrhythmmania.sidemodes.EndlessModeScore
 import polyrhythmmania.ui.PRManiaSkins
 
 
-class PlayEndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
+class PlaySideModesMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
 
-//    private val settings: Settings = menuCol.main.settings
 
     init {
         this.setSize(MMMenu.WIDTH_SMALL)
-        this.titleText.bind { Localization.getVar("mainMenu.play.title").use() }
+        this.titleText.bind { Localization.getVar("mainMenu.play.sideModes").use() }
         this.contentPane.bounds.height.set(300f)
 
         val scrollPane = ScrollPane().apply {
@@ -60,40 +61,28 @@ class PlayEndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
         }
 
         vbox.temporarilyDisableLayouts {
-            vbox += createLongButton { Localization.getVar("mainMenu.play.playSavedLevel").use() }.apply {
-                this.setOnAction {
-                    val loadMenu = LoadSavedLevelMenu(menuCol)
-                    menuCol.addMenu(loadMenu)
-                    menuCol.pushNextMenu(loadMenu)
-                }
-            }
-            vbox += createLongButton { Localization.getVar("mainMenu.play.practice").use() }.apply {
-                this.setOnAction {
-                    menuCol.pushNextMenu(menuCol.practiceMenu)
-                }
-            }
-            
-            vbox += createSidemodeLongButton("mainMenu.play.dunk", Localization.getVar("mainMenu.play.dunk.tooltip",
-                    Var { listOf(main.settings.endlessDunkHighScore.use()) })) { main, _ ->
-                DiscordHelper.updatePresence(DefaultPresences.PlayingDunk)
-                DunkMode(main, EndlessModeScore(main.settings.endlessDunkHighScore))
-            }
-            
             // Remember to update DataSettingsMenu to reset high scores
             vbox += createSidemodeLongButton("mainMenu.play.dunk", Localization.getVar("mainMenu.play.dunk.tooltip",
                     Var { listOf(main.settings.endlessDunkHighScore.use()) })) { main, _ ->
                 DiscordHelper.updatePresence(DefaultPresences.PlayingDunk)
+                mainMenu.backgroundType = BgType.DUNK
                 DunkMode(main, EndlessModeScore(main.settings.endlessDunkHighScore))
             }
-//            vbox += createLongButton { Localization.getVar("mainMenu.play.toss").use() }.apply {
-//                
-//            }
-//            vbox += createLongButton { Localization.getVar("mainMenu.play.dash").use() }.apply {
-//                
-//            }
-            vbox += createLongButton { "...Other modes (possibly) coming soon!" }.apply {
-                this.disabled.set(true)
+            
+            vbox += createLongButton { """Trailer Video: [font=thin]Polyrhythm: Assemble[]""" }.apply {
+                this.tooltipElement.set(createTooltip { "This side mode will be made available in a future update if sufficient\ndevelopment costs are recovered — please consider donating\nto help with development costs! Donation link (goes to PayPal):\n[color=prmania_tooltip_keystroke scale=1]https://donate-to-polyrhythmmania.rhre.dev[]" })
+                this.setOnAction { 
+                    Gdx.net.openURI("""https://www.youtube.com/watch?v=zsmNYD7X37Q""")
+                }
             }
+            vbox += createLongButton { """[font=thin]Future Spot for Side Mode #3[]""" }.apply {
+                this.disabled.set(true)
+                this.tooltipElement.set(createTooltip { "This NEW side mode will be developed for a future update if sufficient\ndevelopment costs are recovered — please consider donating\nto help with development costs! Donation link (goes to PayPal):\n[color=prmania_tooltip_keystroke scale=1]https://donate-to-polyrhythmmania.rhre.dev[]" })
+            }
+
+//            vbox += createLongButton { "...Other modes (possibly) coming soon!" }.apply {
+//                this.disabled.set(true)
+//            }
         }
         vbox.sizeHeightToChildren(100f)
         scrollPane.setContent(vbox)
@@ -107,5 +96,4 @@ class PlayEndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
             }
         }
     }
-    
 }
