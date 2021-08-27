@@ -9,7 +9,6 @@ import paintbox.lazysound.LazySound
 import paintbox.registry.AssetRegistry
 import polyrhythmmania.Localization
 import polyrhythmmania.PRManiaGame
-import polyrhythmmania.engine.ActiveTextBox
 import polyrhythmmania.engine.Engine
 import polyrhythmmania.engine.Event
 import polyrhythmmania.engine.TextBox
@@ -40,6 +39,7 @@ import polyrhythmmania.world.entity.EntityPiston
 class EngineInputter(val engine: Engine) {
     
     companion object {
+        const val DEBUG_LOG_INPUTS: Boolean = false
         const val BEAT_EPSILON: Float = 0.01f
     }
     
@@ -73,7 +73,7 @@ class EngineInputter(val engine: Engine) {
     class EndlessScore {
         val score: Var<Int> = Var(0)
         var highScore: Var<Int> = Var(0)
-        var showHighScore: Boolean = true
+        var showHighScoreAtEnd: Boolean = true
         val maxLives: Var<Int> = Var(0)
         val startingLives: Var<Int> = Var.bind { maxLives.use() }
         val lives: Var<Int> = Var(startingLives.getOrCompute())
@@ -213,7 +213,9 @@ class EngineInputter(val engine: Engine) {
 
                     val accuracyPercent = (differenceSec / InputThresholds.MAX_OFFSET_SEC).coerceIn(-1f, 1f)
                     val inputResult = InputResult(perfectBeats, type, accuracyPercent, differenceSec, activeIndex)
-                    Paintbox.LOGGER.debug("${rod.toString().substringAfter("polyrhythmmania.world.Entity")}: Input ${type}: ${if (differenceSec < 0) "EARLY" else if (differenceSec > 0) "LATE" else "PERFECT"} ${inputResult.inputScore} \t | perfectBeat=$perfectBeats, perfectSec=$perfectSeconds, diffSec=$differenceSec, minmaxSec=[$minSec, $maxSec], actualSec=$atSeconds")
+                    if (DEBUG_LOG_INPUTS) {
+                        Paintbox.LOGGER.debug("${rod.toString().substringAfter("polyrhythmmania.world.Entity")}: Input ${type}: ${if (differenceSec < 0) "EARLY" else if (differenceSec > 0) "LATE" else "PERFECT"} ${inputResult.inputScore} \t | perfectBeat=$perfectBeats, perfectSec=$perfectSeconds, diffSec=$differenceSec, minmaxSec=[$minSec, $maxSec], actualSec=$atSeconds")
+                    }
                     inputTracker.results += inputResult
 
                     if (practice.practiceModeEnabled && inputResult.inputScore != InputScore.MISS) {
@@ -286,7 +288,9 @@ class EngineInputter(val engine: Engine) {
 
                 val accuracyPercent = (differenceSec / InputThresholds.MAX_OFFSET_SEC).coerceIn(-1f, 1f)
                 val inputResult = InputResult(perfectBeats, type, accuracyPercent, differenceSec, activeIndex)
-                Paintbox.LOGGER.debug("${rod.toString().substringAfter("polyrhythmmania.world.Entity")}: Input ${type}: ${if (differenceSec < 0) "EARLY" else if (differenceSec > 0) "LATE" else "PERFECT"} ${inputResult.inputScore} \t | perfectBeat=$perfectBeats, perfectSec=$perfectSeconds, diffSec=$differenceSec, minmaxSec=[$minSec, $maxSec], actualSec=$atSeconds")
+                if (DEBUG_LOG_INPUTS) {
+                    Paintbox.LOGGER.debug("${rod.toString().substringAfter("polyrhythmmania.world.Entity")}: Input ${type}: ${if (differenceSec < 0) "EARLY" else if (differenceSec > 0) "LATE" else "PERFECT"} ${inputResult.inputScore} \t | perfectBeat=$perfectBeats, perfectSec=$perfectSeconds, diffSec=$differenceSec, minmaxSec=[$minSec, $maxSec], actualSec=$atSeconds")
+                }
 
                 val inputFeedbackIndex: Int = getInputFeedbackIndex(inputResult.inputScore, inputResult.accuracySec < 0f)
                 if (inputFeedbackIndex in inputFeedbackFlashes.indices) {
@@ -377,7 +381,7 @@ class EngineInputter(val engine: Engine) {
             override fun onStart(currentBeat: Float) {
                 super.onStart(currentBeat)
                 
-                if (wasNewHighScore && endlessScore.showHighScore) {
+                if (wasNewHighScore && endlessScore.showHighScoreAtEnd) {
                     engine.soundInterface.playMenuSfx(AssetRegistry.get<LazySound>("sfx_fail_music_hi").sound)
                     engine.setActiveTextbox(TextBox(Localization.getValue("play.endless.gameOver.results.newHighScore", score), true))
                 } else {

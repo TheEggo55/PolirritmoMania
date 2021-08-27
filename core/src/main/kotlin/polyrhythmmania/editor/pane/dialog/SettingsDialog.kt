@@ -50,6 +50,7 @@ class SettingsDialog(editorPane: EditorPane) : EditorDialog(editorPane) {
         val resetDefaultActions: MutableList<() -> Unit> = mutableListOf()
         bottomPane.addChild(HBox().apply { 
             this.spacing.set(8f)
+            this.bindWidthToParent(adjust = -100f)
             this += Button(binding = { Localization.getVar("editor.dialog.settings.resetAllToDefault").use() }, font = editorPane.palette.musicDialogFont).apply { 
                 this.applyDialogStyleBottom()
                 this.bounds.width.set(350f)
@@ -80,8 +81,7 @@ class SettingsDialog(editorPane: EditorPane) : EditorDialog(editorPane) {
         fun createCheckbox(text: String, tooltip: String?, keyValue: Settings.KeyValue<Boolean>): CheckBox {
             val bindingVar = keyValue.value
             return CheckBox(binding = { Localization.getVar(text).use() }, font = editorPane.palette.musicDialogFont).apply {
-                this.textLabel.textColor.set(Color.WHITE)
-                this.imageNode.tint.set(Color.WHITE)
+                this.color.set(Color.WHITE.cpy())
                 this.bounds.height.set(blockHeight)
                 if (tooltip != null) {
                     this.tooltipElement.set(editorPane.createDefaultTooltip(Localization.getVar(tooltip)))

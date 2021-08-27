@@ -14,6 +14,7 @@ import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_PANNING_DURING_PLAYBACK
 import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_PLAYTEST_STARTS_PLAY
 import polyrhythmmania.PreferenceKeys.ENDLESS_DAILY_CHALLENGE
 import polyrhythmmania.PreferenceKeys.ENDLESS_DUNK_HIGHSCORE
+import polyrhythmmania.PreferenceKeys.ENDLESS_HIGH_SCORE
 import polyrhythmmania.PreferenceKeys.KEYMAP_KEYBOARD
 import polyrhythmmania.PreferenceKeys.SETTINGS_DISCORD_RPC
 import polyrhythmmania.PreferenceKeys.SETTINGS_FULLSCREEN
@@ -28,6 +29,8 @@ import polyrhythmmania.PreferenceKeys.SETTINGS_WINDOWED_RESOLUTION
 import polyrhythmmania.editor.CameraPanningSetting
 import polyrhythmmania.editor.EditorSetting
 import polyrhythmmania.engine.input.InputKeymapKeyboard
+import polyrhythmmania.sidemodes.endlessmode.DailyChallengeScore
+import polyrhythmmania.sidemodes.endlessmode.EndlessHighScore
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -59,14 +62,11 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
     val kv_editorPlaytestStartsPlay: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_PLAYTEST_STARTS_PLAY, true)
     val kv_editorArrowKeysLikeScroll: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_ARROW_KEYS_LIKE_SCROLL, false)
     
-    val allEditorSettings: List<KeyValue<*>> = listOf(kv_editorDetailedMarkerUndo, kv_editorCameraPanOnDragEdge,
-            kv_editorPanningDuringPlayback, kv_editorAutosaveInterval, kv_editorMusicWaveformOpacity,
-            kv_editorHigherAccuracyPreview, kv_editorPlaytestStartsPlay, kv_editorArrowKeysLikeScroll)
-    
     private val kv_keymapKeyboard: KeyValue<InputKeymapKeyboard> = KeyValue(KEYMAP_KEYBOARD, InputKeymapKeyboard())
             
     private val kv_endlessDunkHighScore: KeyValue<Int> = KeyValue(ENDLESS_DUNK_HIGHSCORE, 0)
-    private val kv_endlessDailyChallenge: KeyValue<Pair<LocalDate, Int>> = KeyValue(ENDLESS_DAILY_CHALLENGE, LocalDate.MIN to 0)
+    private val kv_endlessDailyChallenge: KeyValue<DailyChallengeScore> = KeyValue(ENDLESS_DAILY_CHALLENGE, DailyChallengeScore.ZERO)
+    private val kv_endlessHighScore: KeyValue<EndlessHighScore> = KeyValue(ENDLESS_HIGH_SCORE, EndlessHighScore.ZERO)
 
     val gameplayVolume: Var<Int> = kv_gameplayVolume.value
     val menuMusicVolume: Var<Int> = kv_menuMusicVolume.value
@@ -91,7 +91,8 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
     val inputKeymapKeyboard: Var<InputKeymapKeyboard> = kv_keymapKeyboard.value
     
     val endlessDunkHighScore: Var<Int> = kv_endlessDunkHighScore.value
-    val endlessDailyChallenge: Var<Pair<LocalDate, Int>> = kv_endlessDailyChallenge.value
+    val endlessDailyChallenge: Var<DailyChallengeScore> = kv_endlessDailyChallenge.value
+    val endlessHighScore: Var<EndlessHighScore> = kv_endlessHighScore.value
 
     @Suppress("UNCHECKED_CAST")
     fun load() {
@@ -121,6 +122,7 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
         
         prefs.getInt(kv_endlessDunkHighScore)
         prefs.getDailyChallenge(kv_endlessDailyChallenge)
+        prefs.getEndlessHighScore(kv_endlessHighScore)
     }
 
     fun persist() {
@@ -149,6 +151,7 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
 
                 .putInt(kv_endlessDunkHighScore)
                 .putDailyChallenge(kv_endlessDailyChallenge)
+                .putEndlessHighScore(kv_endlessHighScore)
 
                 .flush()
     }
@@ -264,7 +267,7 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
         return prefs.putString(kv.key, kv.value.getOrCompute().format(DateTimeFormatter.ISO_DATE))
     }
 
-    private fun Preferences.getDailyChallenge(kv: KeyValue<Pair<LocalDate, Int>>) {
+    private fun Preferences.getDailyChallenge(kv: KeyValue<DailyChallengeScore>) {
         val prefs: Preferences = this
         if (prefs.contains(kv.key)) {
             val str = prefs.getString(kv.key)
@@ -273,16 +276,38 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
                 val scoreStr = delimited[0]
                 val dateStr = delimited[1]
                 val localDate: LocalDate = LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
-                kv.value.set(localDate to scoreStr.toInt())
+                kv.value.set(DailyChallengeScore(localDate, scoreStr.toInt()))
             } catch (ignored: Exception) {
-                kv.value.set(LocalDate.MIN to 0)
+                kv.value.set(DailyChallengeScore.ZERO)
             }
         }
     }
 
-    private fun Preferences.putDailyChallenge(kv: KeyValue<Pair<LocalDate, Int>>): Preferences {
+    private fun Preferences.putDailyChallenge(kv: KeyValue<DailyChallengeScore>): Preferences {
         val prefs: Preferences = this
         val pair = kv.value.getOrCompute()
-        return prefs.putString(kv.key, "${pair.second};${pair.first.format(DateTimeFormatter.ISO_DATE)}")
+        return prefs.putString(kv.key, "${pair.score};${pair.date.format(DateTimeFormatter.ISO_DATE)}")
+    }
+    
+    private fun Preferences.getEndlessHighScore(kv: KeyValue<EndlessHighScore>) {
+        val prefs: Preferences = this
+        if (prefs.contains(kv.key)) {
+            val str = prefs.getString(kv.key)
+            try {
+                val delimited = str.split(';')
+                val scoreStr = delimited[0]
+                val seedStr = delimited[1]
+                val seed: UInt = seedStr.toUInt(16)
+                kv.value.set(EndlessHighScore(seed, scoreStr.toInt()))
+            } catch (ignored: Exception) {
+                kv.value.set(EndlessHighScore.ZERO)
+            }
+        }
+    }
+
+    private fun Preferences.putEndlessHighScore(kv: KeyValue<EndlessHighScore>): Preferences {
+        val prefs: Preferences = this
+        val pair = kv.value.getOrCompute()
+        return prefs.putString(kv.key, "${pair.score};${pair.seed.toString(16)}")
     }
 }

@@ -23,6 +23,7 @@ import polyrhythmmania.sidemodes.DunkMode
 import polyrhythmmania.sidemodes.EndlessModeScore
 import polyrhythmmania.sidemodes.endlessmode.EndlessPolyrhythm
 import polyrhythmmania.sidemodes.SideMode
+import polyrhythmmania.sidemodes.endlessmode.DailyChallengeScore
 import polyrhythmmania.ui.PRManiaSkins
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -92,7 +93,19 @@ class PlayMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                 this.setOnAction {
                     menuCol.pushNextMenu(menuCol.endlessMenu)
                 }
-                this.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.endless.tooltip")))
+                val highScoreSubstitutionVar = Localization.getVar("mainMenu.play.endless.tooltip.highScore", Var {
+                    val endlessScore = main.settings.endlessHighScore.use()
+                    listOf(endlessScore.score, EndlessPolyrhythm.getSeedString(endlessScore.seed))
+                })
+                val noHighScoreSubstitutionVar = Localization.getVar("mainMenu.play.endless.tooltip.highScore.none")
+                this.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.endless.tooltip", Var {
+                    val endlessScore = main.settings.endlessHighScore.use()
+                    if (endlessScore.score > 0) {
+                        listOf(highScoreSubstitutionVar.use())
+                    } else {
+                        listOf(noHighScoreSubstitutionVar.use())
+                    }
+                })))
             }
             val dailyChallengeTitle: ReadOnlyVar<String> = Localization.getVar("mainMenu.play.endless.daily", Var {
                 listOf(dailyChallengeDate.use().format(DateTimeFormatter.ISO_DATE))
@@ -106,13 +119,13 @@ class PlayMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                             val date = dailyChallengeDate.getOrCompute()
                             val scoreVar = Var(0)
                             scoreVar.addListener {
-                                main.settings.endlessDailyChallenge.set(date to it.getOrCompute())
+                                main.settings.endlessDailyChallenge.set(DailyChallengeScore(date, it.getOrCompute()))
                             }
                             val sidemode: SideMode = EndlessPolyrhythm(main,
                                     EndlessModeScore(scoreVar, showHighScore = false),
-                                    EndlessPolyrhythm.getSeedFromLocalDate(date), date)
+                                    EndlessPolyrhythm.getSeedFromLocalDate(date), date, disableLifeRegen = false)
                             val playScreen = PlayScreen(main, sidemode, sidemode.container, challenges = Challenges.NO_CHANGES, showResults = false)
-                            main.settings.endlessDailyChallenge.set(date to 0)
+                            main.settings.endlessDailyChallenge.set(DailyChallengeScore(date, 0))
                             main.settings.persist()
                             main.screen = TransitionScreen(main, main.screen, playScreen, null, FadeIn(0.25f, Color(0f, 0f, 0f, 1f))).apply {
                                 this.onEntryEnd = {

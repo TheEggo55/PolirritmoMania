@@ -717,7 +717,7 @@ class TexturePackEditDialog(editorPane: EditorPane,
                 this.padding.set(Insets(2f))
                 this += ImageNode(TextureRegion(AssetRegistry.get<PackedSheet>("ui_icon_editor")["menubar_trash"])).also { img -> 
                     img.tint.bind { 
-                        if (disabled.use()) Color(0.5f, 0.5f, 0.5f, 0.25f) else Color(1f, 1f, 1f, 1f)
+                        if (apparentDisabledState.use()) Color(0.5f, 0.5f, 0.5f, 0.25f) else Color(1f, 1f, 1f, 1f)
                     }
                 }
                 this.tooltipElement.set(editorPane.createDefaultTooltip(Localization.getVar("editor.dialog.texturePack.button.removeTexture")))
@@ -762,7 +762,7 @@ class TexturePackEditDialog(editorPane: EditorPane,
                     this.bounds.width.set(120f)
                     this.textLabel.markup.set(editorPane.palette.markup)
                     val tint: ReadOnlyVar<Color> = Var {
-                        if (disabled.use()) Color.DARK_GRAY.cpy() else Color.WHITE.cpy()
+                        if (apparentDisabledState.use()) Color.DARK_GRAY.cpy() else Color.WHITE.cpy()
                     }
                     this.textLabel.textColor.bind { tint.use() }
                     this.imageNode.tint.bind { tint.use() }
@@ -794,7 +794,7 @@ class TexturePackEditDialog(editorPane: EditorPane,
                     this.bounds.width.set(120f)
                     this.textLabel.markup.set(editorPane.palette.markup)
                     val tint: ReadOnlyVar<Color> = Var {
-                        if (disabled.use()) Color.DARK_GRAY.cpy() else Color.WHITE.cpy()
+                        if (apparentDisabledState.use()) Color.DARK_GRAY.cpy() else Color.WHITE.cpy()
                     }
                     this.textLabel.textColor.bind { tint.use() }
                     this.imageNode.tint.bind { tint.use() }
@@ -918,7 +918,7 @@ class TexturePackEditDialog(editorPane: EditorPane,
         val world: World = World()
         val worldRenderer: WorldRenderer = WorldRenderer(world, Tileset(editor.container.renderer.tileset.texturePack).apply { 
 //            tilesetPalette.applyTo(this)
-        })
+        }, editor.engine)
         
         val rodEntity: EntityRodDecor
         
@@ -1010,7 +1010,7 @@ class TexturePackEditDialog(editorPane: EditorPane,
             frameBuffer.begin()
             Gdx.gl.glClearColor(0f, 0f, 0f, 0f)
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-            worldRenderer.render(batch, editor.engine)
+            worldRenderer.render(batch)
             frameBuffer.end()
             batch.projectionMatrix = prevMatrix
             batch.begin()
