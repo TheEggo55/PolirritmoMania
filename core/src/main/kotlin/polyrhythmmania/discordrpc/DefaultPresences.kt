@@ -1,5 +1,7 @@
 package polyrhythmmania.discordrpc
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToLong
 
 
@@ -20,11 +22,11 @@ object DefaultPresences {
     object PlayingEndlessMode
         : PresenceState("Playing Endless Mode")
     
-    object PlayingDailyChallenge
-        : PresenceState("Playing the Daily Challenge")
+    class PlayingDailyChallenge(val localDate: LocalDate)
+        : PresenceState("Playing the Daily Challenge (${localDate.format(DateTimeFormatter.ISO_DATE)})")
     
     object PlayingDunk
-        : PresenceState("Playing Polyrhythm DUNK!!")
+        : PresenceState("Playing Polyrhythm: Dunk")
 
 
     sealed class Elapsable(state: String, val duration: Float, smallIcon: String = "", smallIconText: String = state)

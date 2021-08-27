@@ -6,6 +6,7 @@ import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.utils.Align
 import paintbox.Paintbox
 import paintbox.binding.Var
+import paintbox.binding.invert
 import paintbox.font.TextAlign
 import paintbox.transition.FadeIn
 import paintbox.transition.TransitionScreen
@@ -19,7 +20,6 @@ import paintbox.ui.layout.HBox
 import paintbox.ui.layout.VBox
 import paintbox.util.TinyFDWrapper
 import paintbox.util.gdxutils.disposeQuietly
-import paintbox.util.gdxutils.isShiftDown
 import polyrhythmmania.Localization
 import polyrhythmmania.PreferenceKeys
 import polyrhythmmania.container.Container
@@ -27,9 +27,9 @@ import polyrhythmmania.discordrpc.DefaultPresences
 import polyrhythmmania.discordrpc.DiscordHelper
 import polyrhythmmania.editor.block.BlockEndState
 import polyrhythmmania.editor.block.Instantiators
-import polyrhythmmania.editor.pane.dialog.LoadDialog
 import polyrhythmmania.engine.input.Challenges
 import polyrhythmmania.screen.PlayScreen
+import polyrhythmmania.screen.mainmenu.bg.BgType
 import polyrhythmmania.soundsystem.SimpleTimingProvider
 import polyrhythmmania.soundsystem.SoundSystem
 import java.io.File
@@ -49,6 +49,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
     val descLabel: TextLabel
     val challengeSetting: Pane
     
+    val robotMode: Var<Boolean> = Var(false)
     val goForPerfect: Var<Boolean> = Var(false)
     val tempoUp: Var<Int> = Var(100)
 
@@ -57,7 +58,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
 
     init {
         this.setSize(WIDTH_MID)
-        this.titleText.bind { Localization.getVar("mainMenu.play.playSavedLevel").use() }
+        this.titleText.bind { Localization.getVar("mainMenu.play.playSavedLevel.title").use() }
         this.contentPane.bounds.height.set(300f)
 
         val content = VBox().apply {
@@ -76,7 +77,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
             this.markup.set(this@LoadSavedLevelMenu.markup)
             this.padding.set(Insets(4f))
             this.bounds.height.set(96f)
-            this.textColor.set(UppermostMenu.ButtonSkin.TEXT_COLOR)
+            this.textColor.set(LongButtonSkin.TEXT_COLOR)
             this.renderAlign.set(Align.center)
             this.textAlign.set(TextAlign.CENTRE)
         }
@@ -92,15 +93,47 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                         font = this@LoadSavedLevelMenu.font).apply {
                     this.bounds.height.set(32f)
                 }
-                this += CheckBox(binding = { Localization.getVar("mainMenu.play.challengeSettings.perfect").use() },
-                        font = this@LoadSavedLevelMenu.font).apply {
+                this += Pane().apply {
                     this.bounds.height.set(32f)
-                    this.checkedState.set(goForPerfect.getOrCompute())
-                    this.imageNode.tint.set(UppermostMenu.ButtonSkin.TEXT_COLOR)
-                    this.textLabel.textColor.set(UppermostMenu.ButtonSkin.TEXT_COLOR)
-                    this.textLabel.padding.set(Insets(0f, 0f, 4f, 0f))
-                    this.onCheckChanged = { newState ->
-                        goForPerfect.set(newState)
+                    val perfectCheckbox = CheckBox(binding = { Localization.getVar("mainMenu.play.challengeSettings.perfect").use() },
+                            font = this@LoadSavedLevelMenu.font).apply {
+                        this.bindWidthToParent(multiplier = 0.5f)
+                        this.checkedState.set(goForPerfect.getOrCompute())
+                        this.color.set(LongButtonSkin.TEXT_COLOR)
+                        this.color.bind {
+                            if (apparentDisabledState.use()) {
+                                LongButtonSkin.DISABLED_TEXT
+                            } else LongButtonSkin.TEXT_COLOR
+                        }
+                        this.textLabel.padding.set(Insets(0f, 0f, 4f, 0f))
+                        this.onCheckChanged = { newState ->
+                            goForPerfect.set(newState)
+                        }
+                        this.disabled.bind { robotMode.use() }
+                    }
+                    this += perfectCheckbox
+                    this += CheckBox(binding = { Localization.getVar("mainMenu.play.challengeSettings.robotMode").use() },
+                            font = this@LoadSavedLevelMenu.font).apply {
+                        this.bindWidthToParent(multiplier = 0.5f)
+                        Anchor.TopRight.configure(this)
+                        this.checkedState.set(robotMode.getOrCompute())
+                        this.color.set(LongButtonSkin.TEXT_COLOR)
+                        this.textLabel.padding.set(Insets(0f, 0f, 4f, 0f))
+                        this.onCheckChanged = { newState ->
+                            robotMode.set(newState)
+                            if (newState) {
+                                perfectCheckbox.checkedState.set(false)
+                            }
+                        }
+                        this.setOnAction {
+                            val newState = checkedState.invert()
+                            if (newState) {
+                                menuCol.playMenuSound("sfx_pause_robot_on")
+                            } else {
+                                menuCol.playMenuSound("sfx_pause_robot_off")
+                            }
+                        }
+                        this.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.challengeSettings.robotMode.tooltip")))
                     }
                 }
                 this += HBox().apply {
@@ -109,7 +142,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                     this += TextLabel(binding = { Localization.getVar("mainMenu.play.challengeSettings.speed").use() },
                             font = this@LoadSavedLevelMenu.font).apply {
                         this.bounds.width.set(100f)
-                        this.textColor.set(UppermostMenu.ButtonSkin.TEXT_COLOR)
+                        this.textColor.set(LongButtonSkin.TEXT_COLOR)
                         this.renderAlign.set(Align.right)
                     }
                     val slider = Slider().apply slider@{
@@ -136,7 +169,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                     this += TextLabel(binding = { percent.use() },
                             font = this@LoadSavedLevelMenu.font).apply {
                         this.bounds.width.set(75f)
-                        this.textColor.set(UppermostMenu.ButtonSkin.TEXT_COLOR)
+                        this.textColor.set(LongButtonSkin.TEXT_COLOR)
                         this.renderAlign.set(Align.left)
                         this.setScaleXY(0.9f)
                     }
@@ -175,7 +208,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                     val loadedData = loaded
                     if (loadedData != null) {
                         val engine = loadedData.newContainer.engine
-                        val robotMode = Gdx.input.isShiftDown()
+                        val robotMode = this@LoadSavedLevelMenu.robotMode.getOrCompute()
                         menuCol.playMenuSound("sfx_menu_enter_game")
                         if (robotMode) {
                             menuCol.playMenuSound("sfx_pause_robot_on")
@@ -183,19 +216,18 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                         }
                         
                         // Set challenge settings
-                        val challenges: Challenges = if (!robotMode) {
-                            Challenges(tempoUp.getOrCompute(), goForPerfect.getOrCompute())
-                        } else Challenges.NO_CHANGES
+                        val challenges: Challenges = Challenges(tempoUp.getOrCompute(), goForPerfect.getOrCompute() && !robotMode)
                         challenges.applyToEngine(engine)
                         
                         mainMenu.transitionAway {
                             val main = mainMenu.main
-                            val playScreen = PlayScreen(main, null, loadedData.newContainer, challenges)
+                            val playScreen = PlayScreen(main, null, loadedData.newContainer, challenges, showResults = !robotMode)
                             main.screen = TransitionScreen(main, main.screen, playScreen, null, FadeIn(0.25f, Color(0f, 0f, 0f, 1f))).apply { 
                                 this.onEntryEnd = {
                                     playScreen.prepareGameStart()
                                     removeSelfFromMenuCol(false)
                                     DiscordHelper.updatePresence(DefaultPresences.PlayingLevel)
+                                    mainMenu.backgroundType = BgType.NORMAL
                                 }
                             }
                         }
@@ -278,7 +310,7 @@ class LoadSavedLevelMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                 Gdx.app.postRunnable {
                     substate.set(Substate.LOAD_ERROR)
                     descLabel.doLineWrapping.set(true)
-                    descLabel.text.set(Localization.getValue("editor.dialog.load.error.futureVersion", loadMetadata.programVersion.toString(), loadMetadata.containerVersion))
+                    descLabel.text.set(Localization.getValue("editor.dialog.load.error.futureVersion", loadMetadata.programVersion.toString(), "${loadMetadata.containerVersion}"))
                     newContainer.disposeQuietly()
                 }
             } else {

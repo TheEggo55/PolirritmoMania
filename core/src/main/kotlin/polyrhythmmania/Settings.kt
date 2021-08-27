@@ -4,6 +4,7 @@ import com.badlogic.gdx.Preferences
 import com.eclipsesource.json.Json
 import paintbox.binding.Var
 import paintbox.util.WindowSize
+import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_ARROW_KEYS_LIKE_SCROLL
 import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_AUTOSAVE_INTERVAL
 import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_CAMERA_PAN_ON_DRAG_EDGE
 import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_DETAILED_MARKER_UNDO
@@ -13,6 +14,7 @@ import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_PANNING_DURING_PLAYBACK
 import polyrhythmmania.PreferenceKeys.EDITORSETTINGS_PLAYTEST_STARTS_PLAY
 import polyrhythmmania.PreferenceKeys.ENDLESS_DAILY_CHALLENGE
 import polyrhythmmania.PreferenceKeys.ENDLESS_DUNK_HIGHSCORE
+import polyrhythmmania.PreferenceKeys.ENDLESS_HIGH_SCORE
 import polyrhythmmania.PreferenceKeys.KEYMAP_KEYBOARD
 import polyrhythmmania.PreferenceKeys.SETTINGS_DISCORD_RPC
 import polyrhythmmania.PreferenceKeys.SETTINGS_FULLSCREEN
@@ -27,38 +29,44 @@ import polyrhythmmania.PreferenceKeys.SETTINGS_WINDOWED_RESOLUTION
 import polyrhythmmania.editor.CameraPanningSetting
 import polyrhythmmania.editor.EditorSetting
 import polyrhythmmania.engine.input.InputKeymapKeyboard
+import polyrhythmmania.sidemodes.endlessmode.DailyChallengeScore
+import polyrhythmmania.sidemodes.endlessmode.EndlessHighScore
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 
-@Suppress("PrivatePropertyName")
+@Suppress("PrivatePropertyName", "PropertyName")
 class Settings(val main: PRManiaGame, val prefs: Preferences) {
 
-    data class KeyValue<T>(val key: String, val value: Var<T>)
+    data class KeyValue<T>(val key: String, val value: Var<T>, val defaultValue: T) {
+        constructor(key: String, defaultValue: T) : this(key, Var(defaultValue), defaultValue)
+    }
 
-    private val kv_gameplayVolume: KeyValue<Int> = KeyValue(SETTINGS_GAMEPLAY_VOLUME, Var(50))
-    private val kv_menuMusicVolume: KeyValue<Int> = KeyValue(SETTINGS_MENU_MUSIC_VOLUME, Var(50))
-    private val kv_menuSfxVolume: KeyValue<Int> = KeyValue(SETTINGS_MENU_SFX_VOLUME, Var(50))
-    private val kv_windowedResolution: KeyValue<WindowSize> = KeyValue(SETTINGS_WINDOWED_RESOLUTION, Var(PRMania.DEFAULT_SIZE))
-    private val kv_fullscreen: KeyValue<Boolean> = KeyValue(SETTINGS_FULLSCREEN, Var(false))
-    private val kv_showInputFeedbackBar: KeyValue<Boolean> = KeyValue(SETTINGS_SHOW_INPUT_FEEDBACK_BAR, Var(true))
-    private val kv_showSkillStar: KeyValue<Boolean> = KeyValue(SETTINGS_SHOW_SKILL_STAR, Var(true))
-    private val kv_musicOffsetMs: KeyValue<Int> = KeyValue(SETTINGS_MUSIC_OFFSET_MS, Var(0))
-    private val kv_discordRichPresence: KeyValue<Boolean> = KeyValue(SETTINGS_DISCORD_RPC, Var(true))
-    private val kv_mixer: KeyValue<String> = KeyValue(SETTINGS_MIXER, Var(""))
+    private val kv_gameplayVolume: KeyValue<Int> = KeyValue(SETTINGS_GAMEPLAY_VOLUME, 50)
+    private val kv_menuMusicVolume: KeyValue<Int> = KeyValue(SETTINGS_MENU_MUSIC_VOLUME, 50)
+    private val kv_menuSfxVolume: KeyValue<Int> = KeyValue(SETTINGS_MENU_SFX_VOLUME, 50)
+    private val kv_windowedResolution: KeyValue<WindowSize> = KeyValue(SETTINGS_WINDOWED_RESOLUTION, PRMania.DEFAULT_SIZE)
+    private val kv_fullscreen: KeyValue<Boolean> = KeyValue(SETTINGS_FULLSCREEN, false)
+    private val kv_showInputFeedbackBar: KeyValue<Boolean> = KeyValue(SETTINGS_SHOW_INPUT_FEEDBACK_BAR, true)
+    private val kv_showSkillStar: KeyValue<Boolean> = KeyValue(SETTINGS_SHOW_SKILL_STAR, true)
+    private val kv_musicOffsetMs: KeyValue<Int> = KeyValue(SETTINGS_MUSIC_OFFSET_MS, 0)
+    private val kv_discordRichPresence: KeyValue<Boolean> = KeyValue(SETTINGS_DISCORD_RPC, true)
+    private val kv_mixer: KeyValue<String> = KeyValue(SETTINGS_MIXER, "")
 
-    private val kv_editorDetailedMarkerUndo: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_DETAILED_MARKER_UNDO, Var(false))
-    private val kv_editorCameraPanOnDragEdge: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_CAMERA_PAN_ON_DRAG_EDGE, Var(true))
-    private val kv_editorPanningDuringPlayback: KeyValue<CameraPanningSetting> = KeyValue(EDITORSETTINGS_PANNING_DURING_PLAYBACK, Var(CameraPanningSetting.PAN))
-    private val kv_editorAutosaveInterval: KeyValue<Int> = KeyValue(EDITORSETTINGS_AUTOSAVE_INTERVAL, Var(5))
-    private val kv_editorMusicWaveformOpacity: KeyValue<Int> = KeyValue(EDITORSETTINGS_MUSIC_WAVEFORM_OPACITY, Var(10))
-    private val kv_editorHigherAccuracyPreview: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_HIGHER_ACCURACY_PREVIEW, Var(true))
-    private val kv_editorPlaytestStartsPlay: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_PLAYTEST_STARTS_PLAY, Var(true))
+    val kv_editorDetailedMarkerUndo: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_DETAILED_MARKER_UNDO, false)
+    val kv_editorCameraPanOnDragEdge: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_CAMERA_PAN_ON_DRAG_EDGE, true)
+    val kv_editorPanningDuringPlayback: KeyValue<CameraPanningSetting> = KeyValue(EDITORSETTINGS_PANNING_DURING_PLAYBACK, CameraPanningSetting.PAN)
+    val kv_editorAutosaveInterval: KeyValue<Int> = KeyValue(EDITORSETTINGS_AUTOSAVE_INTERVAL, 5)
+    val kv_editorMusicWaveformOpacity: KeyValue<Int> = KeyValue(EDITORSETTINGS_MUSIC_WAVEFORM_OPACITY, 10)
+    val kv_editorHigherAccuracyPreview: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_HIGHER_ACCURACY_PREVIEW, true)
+    val kv_editorPlaytestStartsPlay: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_PLAYTEST_STARTS_PLAY, true)
+    val kv_editorArrowKeysLikeScroll: KeyValue<Boolean> = KeyValue(EDITORSETTINGS_ARROW_KEYS_LIKE_SCROLL, false)
     
-    private val kv_keymapKeyboard: KeyValue<InputKeymapKeyboard> = KeyValue(KEYMAP_KEYBOARD, Var(InputKeymapKeyboard()))
+    private val kv_keymapKeyboard: KeyValue<InputKeymapKeyboard> = KeyValue(KEYMAP_KEYBOARD, InputKeymapKeyboard())
             
-    private val kv_endlessDunkHighScore: KeyValue<Int> = KeyValue(ENDLESS_DUNK_HIGHSCORE, Var(0))
-    private val kv_endlessDailyChallenge: KeyValue<Pair<LocalDate, Int>> = KeyValue(ENDLESS_DAILY_CHALLENGE, Var(LocalDate.MIN to 0))
+    private val kv_endlessDunkHighScore: KeyValue<Int> = KeyValue(ENDLESS_DUNK_HIGHSCORE, 0)
+    private val kv_endlessDailyChallenge: KeyValue<DailyChallengeScore> = KeyValue(ENDLESS_DAILY_CHALLENGE, DailyChallengeScore.ZERO)
+    private val kv_endlessHighScore: KeyValue<EndlessHighScore> = KeyValue(ENDLESS_HIGH_SCORE, EndlessHighScore.ZERO)
 
     val gameplayVolume: Var<Int> = kv_gameplayVolume.value
     val menuMusicVolume: Var<Int> = kv_menuMusicVolume.value
@@ -78,11 +86,13 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
     val editorMusicWaveformOpacity: Var<Int> = kv_editorMusicWaveformOpacity.value
     val editorHigherAccuracyPreview: Var<Boolean> = kv_editorHigherAccuracyPreview.value
     val editorPlaytestStartsPlay: Var<Boolean> = kv_editorPlaytestStartsPlay.value
+    val editorArrowKeysLikeScroll: Var<Boolean> = kv_editorArrowKeysLikeScroll.value
     
     val inputKeymapKeyboard: Var<InputKeymapKeyboard> = kv_keymapKeyboard.value
     
     val endlessDunkHighScore: Var<Int> = kv_endlessDunkHighScore.value
-    val endlessDailyChallenge: Var<Pair<LocalDate, Int>> = kv_endlessDailyChallenge.value
+    val endlessDailyChallenge: Var<DailyChallengeScore> = kv_endlessDailyChallenge.value
+    val endlessHighScore: Var<EndlessHighScore> = kv_endlessHighScore.value
 
     @Suppress("UNCHECKED_CAST")
     fun load() {
@@ -106,11 +116,13 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
         prefs.getIntCoerceIn(kv_editorMusicWaveformOpacity, 0, 10)
         prefs.getBoolean(kv_editorHigherAccuracyPreview)
         prefs.getBoolean(kv_editorPlaytestStartsPlay)
+        prefs.getBoolean(kv_editorArrowKeysLikeScroll)
         
         prefs.getInputKeymapKeyboard(kv_keymapKeyboard)
         
         prefs.getInt(kv_endlessDunkHighScore)
         prefs.getDailyChallenge(kv_endlessDailyChallenge)
+        prefs.getEndlessHighScore(kv_endlessHighScore)
     }
 
     fun persist() {
@@ -133,11 +145,13 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
                 .putInt(kv_editorMusicWaveformOpacity)
                 .putBoolean(kv_editorHigherAccuracyPreview)
                 .putBoolean(kv_editorPlaytestStartsPlay)
+                .putBoolean(kv_editorArrowKeysLikeScroll)
 
                 .putInputKeymapKeyboard(kv_keymapKeyboard)
 
                 .putInt(kv_endlessDunkHighScore)
                 .putDailyChallenge(kv_endlessDailyChallenge)
+                .putEndlessHighScore(kv_endlessHighScore)
 
                 .flush()
     }
@@ -253,7 +267,7 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
         return prefs.putString(kv.key, kv.value.getOrCompute().format(DateTimeFormatter.ISO_DATE))
     }
 
-    private fun Preferences.getDailyChallenge(kv: KeyValue<Pair<LocalDate, Int>>) {
+    private fun Preferences.getDailyChallenge(kv: KeyValue<DailyChallengeScore>) {
         val prefs: Preferences = this
         if (prefs.contains(kv.key)) {
             val str = prefs.getString(kv.key)
@@ -262,16 +276,38 @@ class Settings(val main: PRManiaGame, val prefs: Preferences) {
                 val scoreStr = delimited[0]
                 val dateStr = delimited[1]
                 val localDate: LocalDate = LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE)
-                kv.value.set(localDate to scoreStr.toInt())
+                kv.value.set(DailyChallengeScore(localDate, scoreStr.toInt()))
             } catch (ignored: Exception) {
-                kv.value.set(LocalDate.MIN to 0)
+                kv.value.set(DailyChallengeScore.ZERO)
             }
         }
     }
 
-    private fun Preferences.putDailyChallenge(kv: KeyValue<Pair<LocalDate, Int>>): Preferences {
+    private fun Preferences.putDailyChallenge(kv: KeyValue<DailyChallengeScore>): Preferences {
         val prefs: Preferences = this
         val pair = kv.value.getOrCompute()
-        return prefs.putString(kv.key, "${pair.second};${pair.first.format(DateTimeFormatter.ISO_DATE)}")
+        return prefs.putString(kv.key, "${pair.score};${pair.date.format(DateTimeFormatter.ISO_DATE)}")
+    }
+    
+    private fun Preferences.getEndlessHighScore(kv: KeyValue<EndlessHighScore>) {
+        val prefs: Preferences = this
+        if (prefs.contains(kv.key)) {
+            val str = prefs.getString(kv.key)
+            try {
+                val delimited = str.split(';')
+                val scoreStr = delimited[0]
+                val seedStr = delimited[1]
+                val seed: UInt = seedStr.toUInt(16)
+                kv.value.set(EndlessHighScore(seed, scoreStr.toInt()))
+            } catch (ignored: Exception) {
+                kv.value.set(EndlessHighScore.ZERO)
+            }
+        }
+    }
+
+    private fun Preferences.putEndlessHighScore(kv: KeyValue<EndlessHighScore>): Preferences {
+        val prefs: Preferences = this
+        val pair = kv.value.getOrCompute()
+        return prefs.putString(kv.key, "${pair.score};${pair.seed.toString(16)}")
     }
 }

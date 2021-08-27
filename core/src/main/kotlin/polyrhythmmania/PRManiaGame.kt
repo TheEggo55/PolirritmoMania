@@ -3,7 +3,6 @@ package polyrhythmmania
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.Preferences
-import com.badlogic.gdx.Screen
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics
 import com.badlogic.gdx.graphics.Color
@@ -12,6 +11,7 @@ import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator
 import com.badlogic.gdx.utils.Align
+import com.badlogic.gdx.utils.Disposable
 import com.eclipsesource.json.Json
 import org.lwjgl.glfw.GLFW
 import paintbox.*
@@ -39,6 +39,7 @@ import polyrhythmmania.soundsystem.SoundSystem
 import polyrhythmmania.ui.PRManiaSkins
 import polyrhythmmania.util.DumpPackedSheets
 import polyrhythmmania.util.LelandSpecialChars
+import polyrhythmmania.util.TempFileUtils
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -138,9 +139,9 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
                 InputThresholds.initInputClasses()
             }
             onAssetLoadingComplete = {
-                initializeScreens()
-                
                 DiscordHelper.init(settings.discordRichPresence.getOrCompute())
+                
+                initializeScreens()
                 
                 if (PRMania.dumpPackedSheets) {
                     val gdxArray = com.badlogic.gdx.utils.Array<PackedSheet>()
@@ -213,6 +214,7 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
         permanentScreens.forEach { s ->
             s.disposeQuietly()
         }
+        (screen as? Disposable)?.disposeQuietly()
         try {
             val expiry = System.currentTimeMillis() - (7L * 24 * 60 * 60 * 1000)
             PRMania.RECOVERY_FOLDER.listFiles()?.filter { f ->
@@ -221,6 +223,7 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
                 it.delete()
                 Paintbox.LOGGER.info("Deleted old recovery file ${it.name}, lastModified() = ${it.lastModified()}, limit=$expiry")
             }
+            TempFileUtils.clearTempFolder()
         } catch (s: SecurityException) {
             s.printStackTrace()
         }
@@ -397,7 +400,7 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
                 afterLoadFunc: PaintboxFontFreeType.(BitmapFont) -> Unit = defaultAfterLoad,
         ) {
 
-            cache["${fontIDPrefix}"] = PaintboxFontFreeType(
+            cache[fontIDPrefix] = PaintboxFontFreeType(
                     PaintboxFontParams(Gdx.files.internal("fonts/${folder}/$normalFilename"), 1, 1f, scaleToReferenceSize, WindowSize(1280, 720)),
                     makeParam().apply {
                         if (hinting != null) {
@@ -617,6 +620,13 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
                     size = 60
                     borderWidth = 4f
                 }).setAfterLoad(defaultScaledFontAfterLoad)
+        cache["game_ui_text"] = PaintboxFontFreeType(
+                PaintboxFontParams(Gdx.files.internal("fonts/rodin/rodin_lat_cy_ja_ko_spec.ttf"), 40, 3f, true, WindowSize(1280, 720)),
+                makeParam().apply {
+                    hinting = FreeTypeFontGenerator.Hinting.Slight
+                    size = 40
+                    borderWidth = 3f
+                }).setAfterLoad(defaultScaledFontAfterLoad)
         cache["game_practice_clear"] = PaintboxFontFreeType(
                 PaintboxFontParams(Gdx.files.internal("fonts/kurokane/kurokanestd.otf"), 72, 6f, true, WindowSize(1280, 720)),
                 makeParam().apply {
@@ -669,6 +679,7 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
     val fontPauseMenuTitle: PaintboxFont get() = fontCache["pausemenu_title"]
     val fontGameTextbox: PaintboxFont get() = fontCache["game_textbox"]
     val fontGameMoreTimes: PaintboxFont get() = fontCache["game_more_times"]
+    val fontGameUIText: PaintboxFont get() = fontCache["game_ui_text"]
     val fontGamePracticeClear: PaintboxFont get() = fontCache["game_practice_clear"]
     val fontResultsMain: PaintboxFont get() = fontCache["results_main"]
     val fontResultsScore: PaintboxFont get() = fontCache["results_score"]

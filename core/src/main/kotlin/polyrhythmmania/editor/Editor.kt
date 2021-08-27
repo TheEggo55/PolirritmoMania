@@ -218,7 +218,7 @@ class Editor(val main: PRManiaGame)
         frameBuffer.begin()
         Gdx.gl.glClearColor(0f, 0f, 0f, 0f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-        renderer.render(batch, engine)
+        renderer.render(batch)
         frameBuffer.end()
 
         val camera = uiCamera
@@ -746,7 +746,7 @@ class Editor(val main: PRManiaGame)
     fun removeBlocks(blocksToAdd: List<Block>) {
         container.removeBlocks(blocksToAdd)
         this.selectedBlocks as MutableMap
-        blocks.forEach { block ->
+        blocksToAdd.forEach { block ->
             this.selectedBlocks.remove(block)
             if (block.ownedContextMenu != null) {
                 if (sceneRoot.isContextMenuActive())
@@ -826,10 +826,20 @@ class Editor(val main: PRManiaGame)
         val shift = Gdx.input.isShiftDown()
         val currentClick = click.getOrCompute()
         val state = playState.getOrCompute()
+        
+        if (settings.editorArrowKeysLikeScroll.getOrCompute()) {
+            if (keycode == Input.Keys.UP) {
+                Gdx.input.inputProcessor.scrolled(0f, -1f)
+                inputConsumed = true
+            } else if (keycode == Input.Keys.DOWN) {
+                Gdx.input.inputProcessor.scrolled(0f, 1f)
+                inputConsumed = true
+            }
+        }
 
         val contextMenuActive = sceneRoot.isContextMenuActive()
         val dialogActive = sceneRoot.isDialogActive()
-        if (!contextMenuActive && (!dialogActive || sceneRoot.getCurrentRootDialog() == editorPane.playtestDialog)) {
+        if (!inputConsumed && !contextMenuActive && (!dialogActive || sceneRoot.getCurrentRootDialog() == editorPane.playtestDialog)) {
             if (keycode == Input.Keys.SPACE) { // SPACE: Play state (or in Playtest dialog)
                 if (!alt && !ctrl && currentClick == Click.None) {
                     if (state == PlayState.STOPPED) {
@@ -848,7 +858,7 @@ class Editor(val main: PRManiaGame)
                 }
             }
         }
-        if (!contextMenuActive && !dialogActive) {
+        if (!inputConsumed && !contextMenuActive && !dialogActive) {
             if (keycode in MOVE_WINDOW_KEYCODES) {
                 pressedButtons += keycode
                 inputConsumed = true

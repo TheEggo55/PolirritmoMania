@@ -15,6 +15,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.Interpolation
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.utils.Align
+import com.badlogic.gdx.utils.viewport.FitViewport
+import com.badlogic.gdx.utils.viewport.Viewport
 import paintbox.PaintboxGame
 import paintbox.binding.FloatVar
 import paintbox.binding.Var
@@ -52,9 +54,7 @@ import polyrhythmmania.world.EntityRodPR
 import polyrhythmmania.world.render.WorldRenderer
 import space.earlygrey.shapedrawer.ShapeDrawer
 import java.util.*
-import kotlin.math.abs
-import kotlin.math.roundToInt
-import kotlin.math.roundToLong
+import kotlin.math.*
 
 
 class PlayScreen(
@@ -74,7 +74,8 @@ class PlayScreen(
         this.setToOrtho(false, 1280f, 720f)
         this.update()
     }
-    private val sceneRoot: SceneRoot = SceneRoot(uiCamera)
+    private val uiViewport: Viewport = FitViewport(uiCamera.viewportWidth, uiCamera.viewportHeight, uiCamera)
+    private val sceneRoot: SceneRoot = SceneRoot(uiViewport)
     private val inputProcessor: InputProcessor = sceneRoot.inputSystem
     private val shapeDrawer: ShapeDrawer = ShapeDrawer(batch, PaintboxGame.paintboxSpritesheet.fill)
     private val pauseBg: PauseBackground by lazy { this.PauseBackground() }
@@ -177,8 +178,9 @@ class PlayScreen(
             })
         }
         bottomPane += optionsBg
+        
         fun addArrowImageNode(index: Int): ArrowNode {
-            return ArrowNode(TextureRegion(/*AssetRegistry.get<Texture>("pause_rod")*/ AssetRegistry.get<PackedSheet>("ui_icon_editor")["arrow_pointer_finger"])).apply {
+            return ArrowNode(TextureRegion(AssetRegistry.get<PackedSheet>("ui_icon_editor")["arrow_pointer_finger"])).apply {
                 Anchor.CentreLeft.configure(this, offsetY = 4f)
 //                this.bindHeightToParent(multiplier = 1.5f)
                 this.bounds.height.set(64f)
@@ -195,7 +197,7 @@ class PlayScreen(
                 Anchor.TopLeft.configure(this)
                 this.disabled.set(!enabled)
                 this.textColor.bind {
-                    if (disabled.use()) Color.GRAY else if (selectionIndex.use() == index) selectedLabelColor else unselectedLabelColor
+                    if (apparentDisabledState.use()) Color.GRAY else if (selectionIndex.use() == index) selectedLabelColor else unselectedLabelColor
                 }
                 this.bounds.height.set(48f)
                 this.bgPadding.set(Insets(2f, 2f, 12f, 12f))
@@ -210,7 +212,7 @@ class PlayScreen(
                 }
             }
         }
-        resumeLabel = createTextLabelOption("play.pause.resume", 0, true)
+        resumeLabel = createTextLabelOption(if (engine.autoInputs) "play.pause.resume.robotMode" else "play.pause.resume", 0, true)
         startOverLabel = createTextLabelOption("play.pause.startOver", 1, !(sideMode is EndlessPolyrhythm && sideMode.dailyChallenge != null))
         quitLabel = createTextLabelOption("play.pause.quitToMainMenu", 2, true)
         
@@ -234,7 +236,8 @@ class PlayScreen(
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
 
         val batch = this.batch
-        renderer.render(batch, engine)
+        uiViewport.apply()
+        renderer.render(batch)
 
         val camera = uiCamera
         batch.projectionMatrix = camera.combined
@@ -245,6 +248,7 @@ class PlayScreen(
             val height = camera.viewportHeight
             val shapeRenderer = main.shapeRenderer
             shapeRenderer.projectionMatrix = camera.combined
+            uiViewport.apply()
 
             batch.setColor(1f, 1f, 1f, 0.5f)
             batch.fillRect(0f, 0f, width, height)
@@ -309,7 +313,7 @@ class PlayScreen(
     private fun transitionToResults() {
         val inputter = engine.inputter
         val inputsHit = inputter.inputResults.count { it.inputScore != InputScore.MISS }
-        val nInputs = inputter.totalExpectedInputs
+        val nInputs = max(inputter.totalExpectedInputs, inputter.minimumInputCount)
         val rawScore: Float = (if (nInputs <= 0) 0f else ((inputter.inputResults.map { it.inputScore }.sumOfFloat { inputScore ->
             inputScore.weight
         } / nInputs) * 100))
@@ -329,13 +333,6 @@ class PlayScreen(
                 lines.first, lines.second,
                 ranking
         )
-
-//        val mainMenu = main.mainMenuScreen.prepareShow(doFlipAnimation = true)
-//        val menuCol = mainMenu.menuCollection
-//        val tmpResultsMenu = TemporaryResultsMenu(menuCol, results, container)
-//        menuCol.addMenu(tmpResultsMenu)
-//        menuCol.pushNextMenu(tmpResultsMenu, instant = true)
-//        transitionAway(mainMenu, false) {}
         
         transitionAway(ResultsScreen(main, scoreObj, container, {
             PlayScreen(main, sideMode, container, challenges, showResults, musicOffsetMs)
@@ -361,7 +358,7 @@ class PlayScreen(
     }
 
     fun prepareGameStart() {
-        engine.inputter.areInputsLocked = false // FIXME may need better input locking mechanism later
+        engine.inputter.areInputsLocked = engine.autoInputs
         engine.inputter.reset()
         renderer.resetAnimations()
         engine.musicOffsetMs = musicOffsetMs
@@ -458,7 +455,7 @@ class PlayScreen(
 
     private fun attemptPauseEntrySelection() {
         val index = selectionIndex.getOrCompute()
-        if (optionLabels[index].disabled.getOrCompute()) return
+        if (optionLabels[index].apparentDisabledState.getOrCompute()) return
         when (index) {
             0 -> { // Resume
                 unpauseGame(true)
@@ -514,7 +511,7 @@ class PlayScreen(
                         consumed = true
                     }
                     keyboardKeybinds.buttonDpadUp, keyboardKeybinds.buttonDpadDown -> {
-                        if (optionLabels.any { !it.disabled.getOrCompute() }) {
+                        if (optionLabels.any { !it.apparentDisabledState.getOrCompute() }) {
                             val currentIndex = selectionIndex.getOrCompute()
                             val incrementAmt = if (keycode == keyboardKeybinds.buttonDpadUp) -1 else 1
                             var increment = incrementAmt
@@ -592,6 +589,16 @@ class PlayScreen(
         return sound to soundID
     }
 
+    override fun resize(width: Int, height: Int) {
+        super.resize(width, height)
+        uiViewport.update(width, height)
+    }
+
+    override fun showTransition() {
+        super.showTransition()
+        resize(Gdx.graphics.width, Gdx.graphics.height)
+    }
+
     override fun show() {
         super.show()
         unpauseGame(false)
@@ -632,7 +639,7 @@ ${sceneRoot.mainLayer.lastHoveredElementPath.map { it.javaClass.simpleName }}
         val triangleSlope: Float = 1 / 2f
         val topTriangleY: Float = 2 / 3f
         val botTriangleX: Float = 1 / 3f
-        private val topColor: Color = Color.valueOf("4048e0")
+        private val topColor: Color = Color.valueOf("232CDD")
         private val bottomColor: Color = Color.valueOf("d020a0")
 
         init {

@@ -1,23 +1,29 @@
 package paintbox.ui
 
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.graphics.Camera
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.math.Vector3
+import com.badlogic.gdx.utils.viewport.Viewport
 import paintbox.Paintbox
 import paintbox.binding.*
 import paintbox.ui.animation.AnimationHandler
 import paintbox.ui.contextmenu.ContextMenu
+import paintbox.util.viewport.NoOpViewport
 import paintbox.util.gdxutils.drawRect
+import paintbox.util.gdxutils.fillRect
 
 
 /**
  * The [SceneRoot] element has the position 0, 0 and always has the width and height of the UI screen space.
  */
-class SceneRoot(val camera: OrthographicCamera) : UIElement() {
+class SceneRoot(val viewport: Viewport) : UIElement() {
 
     data class MousePosition(val x: FloatVar, val y: FloatVar)
+    
+    val camera: Camera = viewport.camera
 
     private val tmpVec3: Vector3 = Vector3()
     private val mouseVector: Vector2 = Vector2()
@@ -25,7 +31,7 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
 
     val mainLayer: Layer = Layer("main", enableTooltips = true, exclusiveTooltipAccess = false, rootElement = this)
     val dialogLayer: Layer = Layer("dialog", enableTooltips = true, exclusiveTooltipAccess = true)
-    val contextMenuLayer: Layer = Layer("contextMenu", enableTooltips = true, exclusiveTooltipAccess = false)
+    val contextMenuLayer: Layer = Layer("contextMenu", enableTooltips = true, exclusiveTooltipAccess = true)
     val tooltipLayer: Layer = Layer("tooltip", enableTooltips = false, exclusiveTooltipAccess = false)
     val allLayers: List<Layer> = listOf(mainLayer, dialogLayer, contextMenuLayer, tooltipLayer)
     val allLayersReversed: List<Layer> = allLayers.asReversed()
@@ -37,6 +43,7 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
      */
     val frameUpdateTrigger: ReadOnlyVar<Boolean> = Var(false)
     val animations: AnimationHandler = AnimationHandler(this)
+    val applyViewport: Var<Boolean> = Var(true)
 
     val currentElementWithTooltip: ReadOnlyVar<HasTooltip?> = Var(null)
     val currentTooltipVar: ReadOnlyVar<UIElement?> = Var(null)
@@ -47,7 +54,11 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
 
     private val _currentFocused: Var<Focusable?> = Var(null)
     val currentFocusedElement: ReadOnlyVar<Focusable?> = _currentFocused
-
+    
+    constructor(camera: OrthographicCamera) : this(NoOpViewport(camera)) {
+        applyViewport.set(false)
+    }
+    
     init {
         (sceneRoot as Var).set(this)
 
@@ -90,6 +101,10 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
     }
 
     fun renderAsRoot(batch: SpriteBatch) {
+        if (applyViewport.getOrCompute()) {
+            viewport.apply()
+        }
+        
         (frameUpdateTrigger as Var).invert()
         updateMouseVector()
         updateTooltipPosition()
@@ -171,10 +186,12 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
     }
 
     fun resize() {
+        viewport.update(Gdx.graphics.width, Gdx.graphics.height)
         val camera = this.camera
+        val zoom = (camera as? OrthographicCamera)?.zoom ?: 1f
         resize(camera.viewportWidth, camera.viewportHeight,
-                camera.position.x - (camera.zoom * camera.viewportWidth / 2.0f),
-                camera.position.y - (camera.zoom * camera.viewportHeight / 2.0f))
+                camera.position.x - (zoom * camera.viewportWidth / 2.0f),
+                camera.position.y - (zoom * camera.viewportHeight / 2.0f))
     }
 
     fun <E> setFocusedElement(element: E?)
@@ -367,9 +384,9 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
      */
     fun screenToUI(vector: Vector2): Vector2 {
         tmpVec3.set(vector, 0f)
-        camera.unproject(tmpVec3)
+        viewport.unproject(tmpVec3)
         vector.x = tmpVec3.x
-        vector.y = camera.viewportHeight - tmpVec3.y
+        vector.y = viewport.worldHeight - tmpVec3.y
         return vector
     }
 
@@ -381,9 +398,9 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
      */
     fun uiToScreen(vector: Vector2): Vector2 {
         tmpVec3.set(vector, 0f)
-        camera.project(tmpVec3)
+        viewport.project(tmpVec3)
         vector.x = tmpVec3.x
-        vector.y = camera.viewportHeight - tmpVec3.y
+        vector.y = viewport.worldHeight - tmpVec3.y
         return vector
     }
 
@@ -397,13 +414,12 @@ class SceneRoot(val camera: OrthographicCamera) : UIElement() {
         val root: UIElement = rootElement
 
         fun resetHoveredElementPath() {
-            // FIXME may need improvemnets
             lastHoveredElementPath.clear()
             this@SceneRoot.cancelTooltip()
         }
 
         fun shouldEatTooltipAccess(): Boolean {
-            return exclusiveTooltipAccess && root.children.isNotEmpty()
+            return exclusiveTooltipAccess && lastHoveredElementPath.size >= 2
         }
     }
 

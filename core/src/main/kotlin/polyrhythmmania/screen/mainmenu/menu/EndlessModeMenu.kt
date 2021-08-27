@@ -2,18 +2,20 @@ package polyrhythmmania.screen.mainmenu.menu
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.Texture
+import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.utils.Align
 import paintbox.binding.ReadOnlyVar
 import paintbox.binding.Var
+import paintbox.registry.AssetRegistry
 import paintbox.transition.FadeIn
 import paintbox.transition.TransitionScreen
 import paintbox.ui.Anchor
+import paintbox.ui.ImageNode
+import paintbox.ui.UIElement
 import paintbox.ui.area.Insets
 import paintbox.ui.border.SolidBorder
-import paintbox.ui.control.ScrollPane
-import paintbox.ui.control.ScrollPaneSkin
-import paintbox.ui.control.TextField
-import paintbox.ui.control.TextLabel
+import paintbox.ui.control.*
 import paintbox.ui.element.RectElement
 import paintbox.ui.layout.HBox
 import paintbox.ui.layout.VBox
@@ -23,8 +25,11 @@ import polyrhythmmania.discordrpc.DefaultPresences
 import polyrhythmmania.discordrpc.DiscordHelper
 import polyrhythmmania.engine.input.Challenges
 import polyrhythmmania.screen.PlayScreen
+import polyrhythmmania.screen.mainmenu.bg.BgType
 import polyrhythmmania.sidemodes.EndlessModeScore
 import polyrhythmmania.sidemodes.SideMode
+import polyrhythmmania.sidemodes.endlessmode.DailyChallengeScore
+import polyrhythmmania.sidemodes.endlessmode.EndlessHighScore
 import polyrhythmmania.sidemodes.endlessmode.EndlessPolyrhythm
 import polyrhythmmania.ui.PRManiaSkins
 import java.util.*
@@ -74,6 +79,8 @@ class EndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
 
         vbox.temporarilyDisableLayouts {
             val seedText: Var<String> = Var("")
+            val disableRegen: Var<Boolean> = Var(false)
+            val daredevilMode: Var<Boolean> = Var(false)
             val playButtonText: ReadOnlyVar<String> = Var {
                 if (seedText.use().isEmpty()) Localization.getVar("mainMenu.play.endless.play.random").use() else Localization.getVar("mainMenu.play.endless.play").use()
             }
@@ -88,23 +95,39 @@ class EndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                             } catch (e: Exception) {
                                 Random().nextInt().toUInt().toLong()
                             }
-                            val sidemode: SideMode = EndlessPolyrhythm(main, EndlessModeScore(Var(Int.MAX_VALUE)), seed, null)
+                            val seedUInt = seed.toUInt()
+                            val endlessHighScore = main.settings.endlessHighScore
+                            val scoreVar = Var(endlessHighScore.getOrCompute().score)
+                            scoreVar.addListener {
+                                main.settings.endlessHighScore.set(EndlessHighScore(seedUInt, it.getOrCompute()))
+                            }
+                            val sidemode: SideMode = EndlessPolyrhythm(main,
+                                    EndlessModeScore(scoreVar, showHighScore = true),
+                                    seed, dailyChallenge = null,
+                                    disableLifeRegen = disableRegen.getOrCompute(),
+                                    maxLives = if (daredevilMode.getOrCompute()) 1 else -1)
                             val playScreen = PlayScreen(main, sidemode, sidemode.container, challenges = Challenges.NO_CHANGES, showResults = false)
                             main.screen = TransitionScreen(main, main.screen, playScreen, null, FadeIn(0.25f, Color(0f, 0f, 0f, 1f))).apply {
                                 this.onEntryEnd = {
                                     sidemode.prepare()
                                     playScreen.resetAndStartOver(false, false)
                                     DiscordHelper.updatePresence(DefaultPresences.PlayingEndlessMode)
+                                    mainMenu.backgroundType = BgType.ENDLESS
                                 }
                             }
                         }
                     }
                 }
             }
-            vbox += RectElement(Color().grey(90f / 255f, 0.8f)).apply { 
-                this.bounds.height.set(10f)
-                this.margin.set(Insets(4f, 4f, 12f, 12f))
+            
+            fun separator(): UIElement {
+                return RectElement(Color().grey(90f / 255f, 0.8f)).apply {
+                    this.bounds.height.set(10f)
+                    this.margin.set(Insets(4f, 4f, 12f, 12f))
+                }
             }
+            
+            vbox += separator()
             
             vbox += HBox().apply { 
                 this.spacing.set(8f)
@@ -139,7 +162,7 @@ class EndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                 }
                 
                 this += createSmallButton { Localization.getVar("mainMenu.play.endless.settings.clear").use() }.apply { 
-                    this.bounds.width.set(100f)
+                    this.bounds.width.set(80f)
                     this.setOnAction {
                         textField.requestUnfocus()
                         seedText.set("")
@@ -156,7 +179,40 @@ class EndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                         textField.text.set(randomSeedStr)
                     }
                 }
+                this += createSmallButton { "" }.apply copyButton@{
+                    this += ImageNode(TextureRegion(AssetRegistry.get<Texture>("ui_colour_picker_copy"))).also { img ->
+                        img.tint.bind { 
+                            when (this@copyButton.pressedState.use()) {
+                                PressedState.NONE, PressedState.HOVERED -> Color.WHITE
+                                PressedState.PRESSED, PressedState.PRESSED_AND_HOVERED -> Color.LIGHT_GRAY
+                            }
+                        }
+                    }
+                    this.bindWidthToSelfHeight()
+                    this.setOnAction { 
+                        val seed = seedText.getOrCompute()
+                        Gdx.app.clipboard?.contents = seed
+                    }
+                }
             }
+            
+            vbox += separator()
+            
+            val (disableRegenPane, disableRegenCheck) = createCheckboxOption({ Localization.getVar("mainMenu.play.endless.settings.disableRegen").use() })
+            val (daredevilPane, daredevilCheck) = createCheckboxOption({ Localization.getVar("mainMenu.play.endless.settings.daredevil").use() })
+            
+            disableRegenCheck.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.endless.settings.disableRegen.tooltip")))
+            daredevilCheck.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.endless.settings.daredevil.tooltip")))
+            
+            disableRegenCheck.onCheckChanged = { newState ->
+                disableRegen.set(newState)
+            }
+            daredevilCheck.onCheckChanged = { newState ->
+                daredevilMode.set(newState)
+            }
+            
+            vbox += disableRegenPane
+            vbox += daredevilPane
             
         }
 

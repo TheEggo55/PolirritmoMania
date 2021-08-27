@@ -244,9 +244,8 @@ class PaletteEditDialog(editorPane: EditorPane, val tilesetPalette: TilesetPalet
                                         this.bounds.width.set(150f)
                                         this.textLabel.markup.set(editorPane.palette.markup)
                                         this.tooltipElement.set(editorPane.createDefaultTooltip(Localization.getVar("editor.dialog.tilesetPalette.enabled.tooltip")))
-                                        this.textLabel.textColor.set(Color.WHITE)
-                                        this.imageNode.tint.set(Color.WHITE)
                                         this.imageNode.padding.set(Insets(4f))
+                                        this.color.set(Color.WHITE.cpy())
                                         
                                         this.setOnAction { // This overrides the default behaviour of CheckBox
                                             val newState = checkedState.invert()
@@ -470,7 +469,7 @@ class PaletteEditDialog(editorPane: EditorPane, val tilesetPalette: TilesetPalet
         val world: World = World()
         val worldRenderer: WorldRenderer = WorldRenderer(world, Tileset(editor.container.renderer.tileset.texturePack).apply { 
             tilesetPalette.applyTo(this)
-        })
+        }, editor.engine)
         
         val rodEntity: EntityRodDecor
         
@@ -562,7 +561,7 @@ class PaletteEditDialog(editorPane: EditorPane, val tilesetPalette: TilesetPalet
             frameBuffer.begin()
             Gdx.gl.glClearColor(0f, 0f, 0f, 0f)
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-            worldRenderer.render(batch, editor.engine)
+            worldRenderer.render(batch)
             frameBuffer.end()
             batch.projectionMatrix = prevMatrix
             batch.begin()

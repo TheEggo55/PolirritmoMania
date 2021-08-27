@@ -37,6 +37,7 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
     val creditsMenu: CreditsMenu = CreditsMenu(this)
     val playMenu: PlayMenu = PlayMenu(this)
     val practiceMenu: PracticeMenu = PracticeMenu(this)
+    val sideModesMenu: PlaySideModesMenu = PlaySideModesMenu(this)
     val endlessMenu: EndlessModeMenu = EndlessModeMenu(this)
     val settingsMenu: SettingsMenu = SettingsMenu(this)
     val audioSettingsMenu: AudioSettingsMenu = AudioSettingsMenu(this)
@@ -57,6 +58,7 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
         addMenu(creditsMenu)
         addMenu(playMenu)
         addMenu(practiceMenu)
+        addMenu(sideModesMenu)
         addMenu(endlessMenu)
         addMenu(settingsMenu)
         addMenu(videoSettingsMenu)
@@ -122,9 +124,9 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
             val tileX = floor(changedBounds.x / rootWidth * mainMenu.tilesWidth).toInt()
             val tileY = floor(changedBounds.y / rootHeight * mainMenu.tilesHeight).toInt()
             val tileW = (ceil(changedBounds.width / rootWidth * mainMenu.tilesWidth).toInt()).coerceAtLeast(1)
-            val tileH = (ceil(changedBounds.height / rootHeight * mainMenu.tilesHeight).toInt() + 1).coerceAtLeast(1)
-            mainMenu.flipAnimation = MainMenuScreen.TileFlip(tileX, tileY, tileW, tileH,
-                    if (backOut) Corner.TOP_RIGHT else Corner.TOP_LEFT)
+            val tileH = (ceil(changedBounds.height / rootHeight * mainMenu.tilesHeight).toInt()).coerceAtLeast(1)
+            mainMenu.requestTileFlip(MainMenuScreen.TileFlip(tileX, tileY, tileW, tileH,
+                    if (backOut) Corner.TOP_RIGHT else Corner.TOP_LEFT))
             
             RectangleStack.pop()
         }
