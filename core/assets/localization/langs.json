@@ -8,10 +8,10 @@
     }
   },
   {
-    "name": "Español, EE. UU. (Spanish, US)",
+    "name": "Español (Estados Unidos)",
     "locale": {
-      "language": "es_US",
-      "country": "",
+      "language": "es",
+      "country": "US",
       "variant": ""
     }
   }
