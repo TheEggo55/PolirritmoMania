@@ -41,9 +41,11 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
     val endlessMenu: EndlessModeMenu = EndlessModeMenu(this)
     val settingsMenu: SettingsMenu = SettingsMenu(this)
     val audioSettingsMenu: AudioSettingsMenu = AudioSettingsMenu(this)
+    val advancedAudioMenu: AdvAudioMenu = AdvAudioMenu(this)
     val videoSettingsMenu: VideoSettingsMenu = VideoSettingsMenu(this)
     val inputSettingsMenu: InputSettingsMenu = InputSettingsMenu(this)
     val dataSettingsMenu: DataSettingsMenu = DataSettingsMenu(this)
+    val languageMenu: LanguageMenu = LanguageMenu(this)
     
     init {
         addStockMenus()
@@ -63,8 +65,10 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
         addMenu(settingsMenu)
         addMenu(videoSettingsMenu)
         addMenu(audioSettingsMenu)
+        addMenu(advancedAudioMenu)
         addMenu(inputSettingsMenu)
         addMenu(dataSettingsMenu)
+        addMenu(languageMenu)
     }
     
     fun addMenu(menu: MMMenu) {
@@ -123,8 +127,8 @@ class MenuCollection(val mainMenu: MainMenuScreen, val sceneRoot: SceneRoot, val
             val rootHeight = 720f
             val tileX = floor(changedBounds.x / rootWidth * mainMenu.tilesWidth).toInt()
             val tileY = floor(changedBounds.y / rootHeight * mainMenu.tilesHeight).toInt()
-            val tileW = (ceil(changedBounds.width / rootWidth * mainMenu.tilesWidth).toInt()).coerceAtLeast(1)
-            val tileH = (ceil(changedBounds.height / rootHeight * mainMenu.tilesHeight).toInt()).coerceAtLeast(1)
+            val tileW = (ceil(changedBounds.maxX / rootWidth * mainMenu.tilesWidth).toInt() - tileX).coerceAtLeast(1)
+            val tileH = (ceil(changedBounds.maxY / rootHeight * mainMenu.tilesHeight).toInt() - tileY).coerceAtLeast(1)
             mainMenu.requestTileFlip(MainMenuScreen.TileFlip(tileX, tileY, tileW, tileH,
                     if (backOut) Corner.TOP_RIGHT else Corner.TOP_LEFT))
             

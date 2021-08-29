@@ -21,6 +21,9 @@ import paintbox.font.*
 import paintbox.logging.Logger
 import paintbox.packing.PackedSheet
 import paintbox.registry.AssetRegistry
+import paintbox.transition.FadeIn
+import paintbox.transition.FadeOut
+import paintbox.transition.TransitionScreen
 import paintbox.util.ResolutionSetting
 import paintbox.util.Version
 import paintbox.util.WindowSize
@@ -43,6 +46,7 @@ import polyrhythmmania.util.TempFileUtils
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.*
 import kotlin.concurrent.thread
 
 
@@ -97,6 +101,32 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
         PRManiaSkins
         settings = Settings(this, preferences).apply { 
             load()
+            
+            // Find correct locale or default back to first one
+            val localeStr = this.locale.getOrCompute()
+            if (localeStr != "") {
+                val split = localeStr.split('_')
+                val language = split.first()
+                val country = split.getOrNull(1)
+                val variant = split.getOrNull(2)
+                
+                val bundles = Localization.bundles.getOrCompute()
+                val correctLocaleBundle = bundles.find {
+                    it.locale.locale.language == language && it.locale.locale.country == country && it.locale.locale.variant == variant
+                } ?: bundles.find {
+                    it.locale.locale.language == language && it.locale.locale.country == country
+                } ?: bundles.find {
+                    it.locale.locale.language == language
+                }
+                
+                if (correctLocaleBundle == null) {
+                    this.locale.set("")
+                } else {
+                    Localization.currentBundle.set(correctLocaleBundle)
+                }
+            }
+            
+            // Set correct mixer
             val mixerHandler = SoundSystem.defaultMixerHandler
             val mixerString = this.mixer.getOrCompute()
             if (mixerString.isNotEmpty()) {
@@ -153,7 +183,8 @@ class PRManiaGame(paintboxSettings: PaintboxSettings)
 //                polyrhythmmania.world.render.TestWorldRenderScreen(this@PRManiaGame)
 //                EditorScreen(this@PRManiaGame, debugMode = true)
 //                polyrhythmmania.world.render.TestWorldDunkScreen(this@PRManiaGame)
-                mainMenuScreen.prepareShow(doFlipAnimation = true)
+                TransitionScreen(this@PRManiaGame, this@PRManiaGame.getScreen(), mainMenuScreen.prepareShow(doFlipAnimation = true),
+                        FadeOut(0.125f, Color(0f, 0f, 0f, 1f)), FadeIn(0.25f, Color(0f, 0f, 0f, 1f)))
             }
         })
         

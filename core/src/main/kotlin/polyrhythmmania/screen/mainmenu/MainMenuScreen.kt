@@ -25,6 +25,8 @@ import paintbox.font.Markup
 import paintbox.font.TextAlign
 import paintbox.font.TextRun
 import paintbox.registry.AssetRegistry
+import paintbox.transition.FadeOut
+import paintbox.transition.TransitionScreen
 import paintbox.ui.*
 import paintbox.ui.area.Insets
 import paintbox.ui.control.Button
@@ -45,10 +47,7 @@ import polyrhythmmania.discordrpc.DefaultPresences
 import polyrhythmmania.discordrpc.DiscordHelper
 import polyrhythmmania.screen.mainmenu.bg.BgType
 import polyrhythmmania.screen.mainmenu.bg.MainMenuBg
-import polyrhythmmania.screen.mainmenu.menu.InputSettingsMenu
-import polyrhythmmania.screen.mainmenu.menu.MMMenu
-import polyrhythmmania.screen.mainmenu.menu.MenuCollection
-import polyrhythmmania.screen.mainmenu.menu.UppermostMenu
+import polyrhythmmania.screen.mainmenu.menu.*
 import polyrhythmmania.soundsystem.BeadsMusic
 import polyrhythmmania.soundsystem.SoundSystem
 import polyrhythmmania.soundsystem.beads.ugen.Bandpass
@@ -85,6 +84,10 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
         fun update(delta: Float, mainMenu: MainMenuScreen) {
             if (isDone) return
+            if (!isDone && !mainMenu.flipAnimationEnabled.getOrCompute()) {
+                isDone = true
+                return
+            }
 
             val progressDelta = delta / FLIP_SEC_PER_TILE
 
@@ -153,6 +156,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
     // Related to tile flip effect --------------------------------------------------------
 
+    private val flipAnimationEnabled: ReadOnlyVar<Boolean> = main.settings.mainMenuFlipAnimation
     val tileSize: Int = 48
     val tilesWidth: Int = ceil(1280f / tileSize).toInt()
     val tilesHeight: Int = ceil(720f / tileSize).toInt()
@@ -185,17 +189,28 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             musicPlayer.pause(true)
         }
     }
+    private val enoughMusicLoaded: AtomicBoolean = AtomicBoolean(false)
+    private val musicFinishedLoading: AtomicBoolean = AtomicBoolean(false)
+    private val firstShowing: AtomicBoolean = AtomicBoolean(true)
 
     init {
-        val unpausedPlayer = AtomicBoolean(false)
-        val (sample, handler) = GdxAudioReader.newDecodingMusicSample(Gdx.files.internal("music/Title_ABC.ogg")) { bytesReadSoFar, _ ->
-            if (bytesReadSoFar > 100_000L && !unpausedPlayer.get()) {
-                unpausedPlayer.set(true)
-                Gdx.app.postRunnable { 
-                    this.soundSys.musicPlayer.pause(false)
+        val (sample, handler) = GdxAudioReader.newDecodingMusicSample(Gdx.files.internal("music/Title_ABC.ogg"),
+                object : GdxAudioReader.AudioLoadListener {
+            override fun progress(bytesReadSoFar: Long, bytesReadThisChunk: Int) {
+                if (bytesReadSoFar > 100_000L && !enoughMusicLoaded.get()) {
+                    enoughMusicLoaded.set(true)
+                    Gdx.app.postRunnable {
+                        val ss = this@MainMenuScreen.soundSys
+                        ss.resetMusic()
+                        ss.musicPlayer.pause(false)
+                    }
                 }
             }
-        }
+
+            override fun onFinished(totalBytesRead: Long) {
+                musicFinishedLoading.set(true)
+            }
+        })
         musicSample = sample
         thread(start = true, isDaemon = true, name = "Main Menu music decoder", priority = 8) {
             Paintbox.LOGGER.debug("Starting main menu music decode")
@@ -276,7 +291,11 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             val github = main.githubVersion.use()
             github != Version.ZERO && github > PRMania.VERSION
         }
-        sceneRoot += Tooltip("${PRMania.VERSION}", font = main.fontMainMenuMain).apply {
+        sceneRoot += Tooltip(binding = {
+            if (PRMania.portableMode) Localization.getVar("mainMenu.portableModeVersion", Var {
+                listOf(PRMania.VERSION.toString())
+            }).use() else PRMania.VERSION.toString()
+        }, font = main.fontMainMenuMain).apply {
             Anchor.BottomRight.configure(this)
             resizeBoundsToContent()
             this.bounds.height.set(32f)
@@ -318,6 +337,12 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         }
         menuCollection.uppermostMenu.visible.addListener(visibleListener)
         menuCollection.audioSettingsMenu.visible.addListener(visibleListener)
+        
+        if (PRMania.possiblyNewPortableMode) {
+            val m = PortableModeWarningMenu(menuCollection)
+            menuCollection.addMenu(m)
+            menuCollection.pushNextMenu(m, playSound = false)
+        }
     }
 
     override fun render(delta: Float) {
@@ -454,11 +479,13 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
     }
 
     fun prepareShow(doFlipAnimation: Boolean = false): MainMenuScreen {
+        resize(Gdx.graphics.width, Gdx.graphics.height)
+        
         resetTiles()
         // Uncomment 2 lines below to have it reset to the uppermostMenu each time
 //        menuCollection.changeActiveMenu(menuCollection.uppermostMenu, false, instant = true)
 //        menuCollection.resetMenuStack()
-        if (doFlipAnimation) {
+        if (doFlipAnimation && flipAnimationEnabled.getOrCompute()) {
             // Black out frame buffers
             lastProjMatrix.set(batch.projectionMatrix)
             val camera = fullCamera
@@ -525,7 +552,10 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
         sceneRoot.cancelTooltip()
         
         soundSys.soundSystem.setPaused(false)
-        soundSys.resetMusic()
+        if (enoughMusicLoaded.get() && musicFinishedLoading.get() && !firstShowing.get()) {
+            soundSys.resetMusic()
+        }
+        firstShowing.set(false)
 
         DiscordHelper.updatePresence(DefaultPresences.Idle)
         background.initializeFromType(this.backgroundType)

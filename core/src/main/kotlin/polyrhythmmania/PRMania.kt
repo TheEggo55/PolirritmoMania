@@ -16,11 +16,19 @@ object PRMania {
     const val HEIGHT: Int = 720
     val DEFAULT_SIZE: WindowSize = WindowSize(WIDTH, HEIGHT)
     val MINIMUM_SIZE: WindowSize = WindowSize(1152, 648)
-    val MAIN_FOLDER: File = File(System.getProperty("user.home") + "/.polyrhythmmania/").apply {
-        mkdirs()
+    
+    var portableMode: Boolean = false
+    var possiblyNewPortableMode: Boolean = false
+    
+    val MAIN_FOLDER: File by lazy {
+        (if (portableMode) File(".polyrhythmmania/") else File(System.getProperty("user.home") + "/.polyrhythmmania/")).apply {
+            mkdirs()
+        }
     }
-    val RECOVERY_FOLDER: File = MAIN_FOLDER.resolve("recovery/").apply { 
-        mkdirs()
+    val RECOVERY_FOLDER: File by lazy {
+        MAIN_FOLDER.resolve("recovery/").apply {
+            mkdirs()
+        }
     }
     val commonResolutions: List<WindowSize> = listOf(
             WindowSize(1152, 648),
@@ -32,7 +40,7 @@ object PRMania {
             WindowSize(3840, 2160),
     ).sortedBy { it.width }
     
-    val enableEarlyAccessMessage: Boolean = false
+    val enableEarlyAccessMessage: Boolean = (VERSION.suffix.startsWith("dev") || VERSION.suffix.startsWith("beta"))
     
     // Command line arguments
     var logMissingLocalizations: Boolean = false
