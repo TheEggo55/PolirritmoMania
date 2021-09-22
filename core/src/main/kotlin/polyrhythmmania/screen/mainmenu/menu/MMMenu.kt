@@ -233,8 +233,9 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
         }
     }
     
-    protected fun createSliderPane(slider: Slider, labelText: Var.Context.() -> String): SettingsOptionPane {
-        return createSettingsOption(labelText).apply {
+    protected fun createSliderPane(slider: Slider, percentageContent: Float = 0.5f,
+                                   labelText: Var.Context.() -> String): SettingsOptionPane {
+        return createSettingsOption(labelText, percentageContent = percentageContent).apply {
             this.content.addChild(slider)
             Anchor.CentreRight.configure(slider)
         }
@@ -246,7 +247,13 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
         val checkBox = CheckBox(binding = labelText, font = font).apply { 
             Anchor.TopRight.configure(this)
             this.boxAlignment.set(CheckBox.BoxAlign.RIGHT)
-            this.color.bind { settingsOptionPane.textColorVar.use() }
+            this.color.bind { 
+                if (apparentDisabledState.use()) {
+                    LongButtonSkin.DISABLED_TEXT
+                } else {
+                    settingsOptionPane.textColorVar.use()
+                }
+            }
             this.textLabel.renderAlign.set(Align.left)
             this.textLabel.textAlign.set(TextAlign.LEFT)
             this.textLabel.margin.set(this.textLabel.margin.getOrCompute().copy(left = 0f))
@@ -295,7 +302,9 @@ open class StandardMenu(menuCol: MenuCollection) : MMMenu(menuCol) {
                     val main = mainMenu.main
                     Gdx.app.postRunnable {
                         val sidemode: SideMode = factory.invoke(main, main.settings.inputKeymapKeyboard.getOrCompute().copy())
-                        val playScreen = PlayScreen(main, sidemode, sidemode.container, challenges = challenges, showResults = showResults)
+                        val playScreen = PlayScreen(main, sidemode, sidemode.container,
+                                inputCalibration = main.settings.inputCalibration.getOrCompute(),
+                                challenges = challenges, showResults = showResults)
                         main.screen = TransitionScreen(main, main.screen, playScreen, null, FadeIn(0.25f, Color(0f, 0f, 0f, 1f))).apply {
                             this.onEntryEnd = {
                                 sidemode.prepare()

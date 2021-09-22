@@ -106,12 +106,14 @@ class EndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
                                     seed, dailyChallenge = null,
                                     disableLifeRegen = disableRegen.getOrCompute(),
                                     maxLives = if (daredevilMode.getOrCompute()) 1 else -1)
-                            val playScreen = PlayScreen(main, sidemode, sidemode.container, challenges = Challenges.NO_CHANGES, showResults = false)
+                            val playScreen = PlayScreen(main, sidemode, sidemode.container,
+                                    challenges = Challenges.NO_CHANGES, showResults = false,
+                                    inputCalibration = main.settings.inputCalibration.getOrCompute())
                             main.screen = TransitionScreen(main, main.screen, playScreen, null, FadeIn(0.25f, Color(0f, 0f, 0f, 1f))).apply {
                                 this.onEntryEnd = {
                                     sidemode.prepare()
                                     playScreen.resetAndStartOver(false, false)
-                                    DiscordHelper.updatePresence(DefaultPresences.PlayingEndlessMode)
+                                    DiscordHelper.updatePresence(DefaultPresences.PlayingEndlessMode())
                                     mainMenu.backgroundType = BgType.ENDLESS
                                 }
                             }
@@ -204,11 +206,18 @@ class EndlessModeMenu(menuCol: MenuCollection) : StandardMenu(menuCol) {
             disableRegenCheck.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.endless.settings.disableRegen.tooltip")))
             daredevilCheck.tooltipElement.set(createTooltip(Localization.getVar("mainMenu.play.endless.settings.daredevil.tooltip")))
             
+            disableRegenCheck.disabled.bind { 
+                daredevilMode.use()
+            }
+            
             disableRegenCheck.onCheckChanged = { newState ->
                 disableRegen.set(newState)
             }
             daredevilCheck.onCheckChanged = { newState ->
                 daredevilMode.set(newState)
+                if (newState) {
+                    disableRegenCheck.checkedState.set(false)
+                }
             }
             
             vbox += disableRegenPane

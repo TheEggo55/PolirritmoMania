@@ -9,9 +9,7 @@ import paintbox.lazysound.LazySound
 import paintbox.registry.AssetRegistry
 import polyrhythmmania.Localization
 import polyrhythmmania.PRManiaGame
-import polyrhythmmania.engine.Engine
-import polyrhythmmania.engine.Event
-import polyrhythmmania.engine.TextBox
+import polyrhythmmania.engine.*
 import polyrhythmmania.engine.music.MusicVolume
 import polyrhythmmania.soundsystem.BeadsSound
 import polyrhythmmania.world.*
@@ -140,7 +138,7 @@ class EngineInputter(val engine: Engine) {
             } else {
                 if (release) {
                     engine.soundInterface.playMenuSfx(AssetRegistry.get<Sound>("sfx_text_advance_2"))
-                    engine.removeActiveTextbox(true)
+                    engine.removeActiveTextbox(unpauseSoundInterface = true, runTextboxOnComplete = true)
                 }
             }
         } else {
@@ -231,10 +229,10 @@ class EngineInputter(val engine: Engine) {
                                 val newValue = (practice.moreTimes.getOrCompute() - 1).coerceAtLeast(0)
                                 practice.moreTimes.set(newValue)
                                 if (newValue == 0) {
-                                    engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_practice_moretimes_2"))
+                                    engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_practice_moretimes_2"), SoundInterface.SFXType.NORMAL)
                                     practice.clearText = 1f
                                 } else {
-                                    engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_practice_moretimes_1"))
+                                    engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_practice_moretimes_1"), SoundInterface.SFXType.NORMAL)
                                 }
                             }
                         }
@@ -341,7 +339,7 @@ class EngineInputter(val engine: Engine) {
             if (!challenge.failed) {
                 challenge.failed = true
                 challenge.hit = 1f
-                engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_perfect_fail")) { player ->
+                engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_perfect_fail"), SoundInterface.SFXType.NORMAL) { player ->
                     player.gain = 0.45f
                 }
             }
@@ -381,23 +379,22 @@ class EngineInputter(val engine: Engine) {
             override fun onStart(currentBeat: Float) {
                 super.onStart(currentBeat)
                 
-                if (wasNewHighScore && endlessScore.showHighScoreAtEnd) {
+                val activeTextBox: ActiveTextBox = if (wasNewHighScore && endlessScore.showHighScoreAtEnd) {
                     engine.soundInterface.playMenuSfx(AssetRegistry.get<LazySound>("sfx_fail_music_hi").sound)
-                    engine.setActiveTextbox(TextBox(Localization.getValue("play.endless.gameOver.results.newHighScore", score), true))
+                    engine.setActiveTextbox(TextBox(Localization.getValue("play.endless.gameOver.results.newHighScore", score), true, style = TextBoxStyle.BLACK))
                 } else {
                     engine.soundInterface.playMenuSfx(AssetRegistry.get<LazySound>("sfx_fail_music_nohi").sound)
-                    engine.setActiveTextbox(TextBox(Localization.getValue("play.endless.gameOver.results", score), true))
+                    engine.setActiveTextbox(TextBox(Localization.getValue("play.endless.gameOver.results", score), true, style = TextBoxStyle.BLACK))
                 }
+                activeTextBox.onComplete = { engine ->
+                    engine.addEvent(EventEndState(engine, currentBeat))
+                }
+                
                 if (wasNewHighScore) {
                     endlessScore.highScore.set(score)
                     PRManiaGame.instance.settings.persist()
                 }
                 endlessScore.gameOverUIShown.set(true)
-            }
-
-            override fun onEnd(currentBeat: Float) {
-                super.onEnd(currentBeat)
-                engine.addEvent(EventEndState(engine, currentBeat))
             }
         }.apply {
             this.beat = afterBeat
@@ -415,7 +412,7 @@ class EngineInputter(val engine: Engine) {
     }
     
     fun onSkillStarHit() {
-        engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_skill_star")) { player ->
+        engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_skill_star"), SoundInterface.SFXType.PLAYER_INPUT) { player ->
             player.gain = 0.6f
         }
     }

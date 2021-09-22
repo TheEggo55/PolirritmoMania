@@ -30,7 +30,7 @@ class MusicData(val engine: Engine) {
         val music = this.beadsMusic
         val player = engine.soundInterface.getCurrentMusicPlayer(music)
         if (player != null) {
-            val volume = volumeMap.volumeAtBeat(currentBeat)
+            val volume: Int = volumeMap.volumeAtBeat(currentBeat)
             player.gain = volume / 100f
             player.pitch = rate * engine.playbackSpeed
 
@@ -85,7 +85,12 @@ class MusicData(val engine: Engine) {
     
     fun computeMusicDelaySec(): Float {
         val rate = this.rate
-        return ((engine.tempos.beatsToSeconds(this.musicSyncPointBeat) * rate - this.firstBeatSec) / rate * 1000 + (engine.musicOffsetMs * rate) /* <- this is a user calibration setting */) / 1000
+        return ((engine.tempos.beatsToSeconds(this.musicSyncPointBeat) * rate - this.firstBeatSec) / rate * 1000 + (engine.inputCalibration.audioOffsetMs * rate) /* <- this is a user calibration setting */) / 1000
+    }
+    
+    fun computeMusicDelaySecNoCalibration(): Float {
+        val rate = this.rate
+        return ((engine.tempos.beatsToSeconds(this.musicSyncPointBeat) * rate - this.firstBeatSec) / rate * 1000) / 1000
     }
 
 }

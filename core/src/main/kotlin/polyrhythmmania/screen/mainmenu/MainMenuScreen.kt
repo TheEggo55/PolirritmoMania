@@ -25,13 +25,12 @@ import paintbox.font.Markup
 import paintbox.font.TextAlign
 import paintbox.font.TextRun
 import paintbox.registry.AssetRegistry
-import paintbox.transition.FadeOut
-import paintbox.transition.TransitionScreen
 import paintbox.ui.*
 import paintbox.ui.area.Insets
 import paintbox.ui.control.Button
 import paintbox.ui.control.TextLabelSkin
 import paintbox.ui.layout.VBox
+import paintbox.util.MathHelper
 import paintbox.util.Version
 import paintbox.util.WindowSize
 import paintbox.util.gdxutils.disposeQuietly
@@ -51,8 +50,8 @@ import polyrhythmmania.screen.mainmenu.menu.*
 import polyrhythmmania.soundsystem.BeadsMusic
 import polyrhythmmania.soundsystem.SoundSystem
 import polyrhythmmania.soundsystem.beads.ugen.Bandpass
-import polyrhythmmania.soundsystem.sample.DecodingMusicSample
 import polyrhythmmania.soundsystem.sample.GdxAudioReader
+import polyrhythmmania.soundsystem.sample.MusicSample
 import polyrhythmmania.soundsystem.sample.MusicSamplePlayer
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -153,6 +152,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
     private val logoImage: ImageNode
     private val menuPane: Pane = Pane()
     val menuCollection: MenuCollection = MenuCollection(this, sceneRoot, menuPane)
+    private val newVersionFloaterAnimation: FloatVar = FloatVar(0f)
 
     // Related to tile flip effect --------------------------------------------------------
 
@@ -181,7 +181,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
     private val menuMusicVolume: FloatVar = FloatVar { 
         main.settings.menuMusicVolume.use() / 100f
     }
-    private val musicSample: DecodingMusicSample
+    private val musicSample: MusicSample
     private val beadsMusic: BeadsMusic
     private var shouldBeBandpass: Boolean = false
     var soundSys: SoundSys by settableLazy {
@@ -212,6 +212,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             }
         })
         musicSample = sample
+        musicSample.metricsPopulateBuffer = PRMania.metrics.timer("mainMenu.musicSample.populateBuffer")
         thread(start = true, isDaemon = true, name = "Main Menu music decoder", priority = 8) {
             Paintbox.LOGGER.debug("Starting main menu music decode")
             handler.decode()
@@ -291,7 +292,7 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             val github = main.githubVersion.use()
             github != Version.ZERO && github > PRMania.VERSION
         }
-        sceneRoot += Tooltip(binding = {
+        val versionTooltip = Tooltip(binding = {
             if (PRMania.portableMode) Localization.getVar("mainMenu.portableModeVersion", Var {
                 listOf(PRMania.VERSION.toString())
             }).use() else PRMania.VERSION.toString()
@@ -318,6 +319,26 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
             this.setOnAction { 
                 Gdx.net.openURI("${PRMania.GITHUB}/releases/latest")
             }
+        }
+        sceneRoot += versionTooltip
+        sceneRoot += Tooltip(binding = { Localization.getVar("mainMenu.newVersionFloater").use() }, font = main.fontMainMenuMain).apply {
+            Anchor.BottomRight.configure(this)
+            val leftSide = FloatVar {
+                versionTooltip.bounds.x.useF() - bounds.width.useF()
+            }
+            this.bounds.x.bind { 
+                leftSide.useF() - (newVersionFloaterAnimation.useF() * 20f)
+            }
+            resizeBoundsToContent()
+            this.bounds.height.set(32f)
+            this.renderAlign.set(Align.bottomRight)
+            this.textAlign.set(TextAlign.RIGHT)
+            this.renderBackground.set(true)
+            this.bgPadding.set(Insets(8f))
+            this.visible.bind { 
+                newVersionAvailable.use()
+            }
+            (this.skin.getOrCompute() as TextLabelSkin).defaultBgColor.set(Color().grey(0.1f, 0.5f))
         }
     }
 
@@ -453,6 +474,9 @@ class MainMenuScreen(main: PRManiaGame) : PRManiaScreen(main) {
 
     override fun renderUpdate() {
         super.renderUpdate()
+        
+        newVersionFloaterAnimation.set(MathHelper.getCosineWave(1.5f))
+        
 //        if (Gdx.input.isKeyJustPressed(Input.Keys.I)) {
 //            crossFade.fadeTo(musicPlayer, 1000f)
 //        }

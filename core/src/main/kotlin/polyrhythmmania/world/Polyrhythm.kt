@@ -8,6 +8,7 @@ import com.badlogic.gdx.math.Vector3
 import paintbox.binding.Var
 import paintbox.registry.AssetRegistry
 import polyrhythmmania.engine.Engine
+import polyrhythmmania.engine.SoundInterface
 import polyrhythmmania.engine.input.EngineInputter
 import polyrhythmmania.engine.input.InputResult
 import polyrhythmmania.engine.input.InputScore
@@ -51,8 +52,8 @@ class EntityRowBlock(world: World, val baseY: Float, val row: Row, val rowIndex:
         when (type) {
             Type.PLATFORM -> {
             }
-            Type.PISTON_A -> engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_input_a"))
-            Type.PISTON_DPAD -> engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_input_d"))
+            Type.PISTON_A -> engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_input_a"), SoundInterface.SFXType.PLAYER_INPUT)
+            Type.PISTON_DPAD -> engine.soundInterface.playAudio(AssetRegistry.get<BeadsSound>("sfx_input_d"), SoundInterface.SFXType.PLAYER_INPUT)
         }
 
         // For auto-inputs only. For regular inputs, see EngineInputter
@@ -438,7 +439,7 @@ class EntityRodPR(world: World, deployBeat: Float, val row: Row,
                         val futureY = this.position.y + veloY * deltaSec
                         if (futureY < floorBelow) {
                             this.position.y = floorBelow
-                            if (blockBelow.spawningState != EntityRowBlock.SpawningState.DESPAWNING) {
+                            if (blockBelow.spawningState != EntityRowBlock.SpawningState.DESPAWNING && currentIndex <= 12) {
                                 playSfxLand(engine)
                             }
                             collision.velocityY = 0f

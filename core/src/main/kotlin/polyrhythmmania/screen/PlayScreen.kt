@@ -43,6 +43,7 @@ import polyrhythmmania.PRManiaGame
 import polyrhythmmania.PRManiaScreen
 import polyrhythmmania.container.Container
 import polyrhythmmania.engine.Engine
+import polyrhythmmania.engine.InputCalibration
 import polyrhythmmania.engine.input.*
 import polyrhythmmania.screen.results.ResultsScreen
 import polyrhythmmania.sidemodes.SideMode
@@ -59,8 +60,8 @@ import kotlin.math.*
 
 class PlayScreen(
         main: PRManiaGame, val sideMode: SideMode?, val container: Container, val challenges: Challenges,
+        val inputCalibration: InputCalibration,
         val showResults: Boolean = true,
-        val musicOffsetMs: Float = main.settings.musicOffsetMs.getOrCompute().toFloat(),
 ) : PRManiaScreen(main) {
 
     val timing: TimingProvider get() = container.timing
@@ -335,7 +336,7 @@ class PlayScreen(
         )
         
         transitionAway(ResultsScreen(main, scoreObj, container, {
-            PlayScreen(main, sideMode, container, challenges, showResults, musicOffsetMs)
+            PlayScreen(main, sideMode, container, challenges, inputCalibration, showResults)
         }, keyboardKeybinds), disposeContainer = false) {}
     }
 
@@ -361,11 +362,11 @@ class PlayScreen(
         engine.inputter.areInputsLocked = engine.autoInputs
         engine.inputter.reset()
         renderer.resetAnimations()
-        engine.musicOffsetMs = musicOffsetMs
-        engine.removeActiveTextbox(false)
+        engine.inputCalibration = this.inputCalibration
+        engine.removeActiveTextbox(unpauseSoundInterface = false, runTextboxOnComplete = false)
         engine.resetEndSignal()
         
-        timing.seconds = -1f
+        timing.seconds = min(-1f, -1f + this.inputCalibration.audioOffsetMs / 1000f)
         engine.seconds = timing.seconds
         val player = engine.soundInterface.getCurrentMusicPlayer(engine.musicData.beadsMusic)
         if (player != null) {
@@ -432,14 +433,15 @@ class PlayScreen(
         val thisScreen: PlayScreen = this
         val resetAction: () -> Unit = {
             challenges.applyToEngine(engine)
-            val blocks = container.blocks.toList()
             engine.removeEvents(engine.events.toList())
-            engine.addEvents(blocks.flatMap { it.compileIntoEvents() })
             container.world.resetWorld()
             container.world.tilesetPalette.applyTo(container.renderer.tileset)
             engine.soundInterface.clearAllNonMusicAudio()
             container.setTexturePackFromSource()
+            
             prepareGameStart()
+            val blocks = container.blocks.toList()
+            engine.addEvents(blocks.flatMap { it.compileIntoEvents() })
             unpauseGame(false)
         }
         if (doWipeTransition) {

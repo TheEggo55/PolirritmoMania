@@ -1,27 +1,42 @@
 package polyrhythmmania.engine
 
+import com.codahale.metrics.*
 import paintbox.binding.Var
+import polyrhythmmania.PRMania
 import polyrhythmmania.container.Container
 import polyrhythmmania.engine.input.EngineInputter
 import polyrhythmmania.engine.timesignature.TimeSignatureMap
 import polyrhythmmania.soundsystem.SoundSystem
 import polyrhythmmania.soundsystem.TimingProvider
 import polyrhythmmania.util.DecimalFormats
+import polyrhythmmania.util.metrics.timeInline
 import polyrhythmmania.world.World
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 
 
 /**
  * An [Engine] fires the [Event]s based on the internal [TimingProvider].
  * It also contains the [World] upon which these events operate in.
  */
-class Engine(timingProvider: TimingProvider, val world: World, soundSystem: SoundSystem?, val container: Container?)
+class Engine(timingProvider: TimingProvider,
+             val world: World, soundSystem: SoundSystem?, val container: Container?,
+             disableMetricsReporting: Boolean = false)
     : Clock(timingProvider) {
+    
+    val metrics: MetricRegistry = MetricRegistry()
+    val metricsEnabled: Boolean = PRMania.enableMetrics && !disableMetricsReporting
+    val metricsReporter: ScheduledReporter = ConsoleReporter.forRegistry(this.metrics)
+            .convertRatesTo(TimeUnit.SECONDS)
+            .convertDurationsTo(TimeUnit.MILLISECONDS)
+            .build()
+    private val timerUpdateSeconds: Timer = this.metrics.timer("engine.updateSeconds")
+    private val timerUpdateEvents: Timer = this.metrics.timer("engine.updateEvents")
+    private val timerUpdateWorld: Timer = this.metrics.timer("engine.updateWorld")
 
     private val queuedRunnables: MutableList<Runnable> = CopyOnWriteArrayList()
-    
     val inputter: EngineInputter = EngineInputter(this)
-    val soundInterface: SoundInterface = SoundInterface.createFromSoundSystem(soundSystem)
+    val soundInterface: SoundInterface = SoundInterface.createFromSoundSystem(soundSystem, this)
     private val _events: MutableList<Event> = CopyOnWriteArrayList()
     val events: List<Event> = _events
     val musicData: MusicData = MusicData(this)
@@ -31,10 +46,18 @@ class Engine(timingProvider: TimingProvider, val world: World, soundSystem: Soun
     
     var deleteEventsAfterCompletion: Boolean = true
     var autoInputs: Boolean = false
-    var musicOffsetMs: Float = 0f
+    var inputCalibration: InputCalibration = InputCalibration.NONE
     
     var activeTextBox: ActiveTextBox? = null
         private set
+    
+    init {
+        endSignalReceived.addListener {
+            if (it.getOrCompute() && this.metricsEnabled) {
+                metricsReporter.report()
+            }
+        }
+    }
     
     fun resetEndSignal() {
         endSignalReceived.set(false)
@@ -64,21 +87,24 @@ class Engine(timingProvider: TimingProvider, val world: World, soundSystem: Soun
         this._events.removeAll(events)
     }
     
-    fun setActiveTextbox(newTextbox: TextBox) {
+    fun setActiveTextbox(newTextbox: TextBox): ActiveTextBox {
         val newActive = newTextbox.toActive()
-
         this.activeTextBox = newActive
         if (newActive.textBox.requiresInput) {
             newActive.wasSoundInterfacePaused = soundInterface.isPaused()
             soundInterface.setPaused(true)
         }
+        return newActive
     }
     
-    fun removeActiveTextbox(unpauseSound: Boolean) {
+    fun removeActiveTextbox(unpauseSoundInterface: Boolean, runTextboxOnComplete: Boolean) {
         val old = activeTextBox
         activeTextBox = null
-        if (unpauseSound && old != null && old.textBox.requiresInput && !old.wasSoundInterfacePaused) {
+        if (unpauseSoundInterface && old != null && old.textBox.requiresInput && !old.wasSoundInterfacePaused) {
             soundInterface.setPaused(false)
+        }
+        if (runTextboxOnComplete) {
+            old?.onComplete?.invoke(this)
         }
     }
     
@@ -87,6 +113,39 @@ class Engine(timingProvider: TimingProvider, val world: World, soundSystem: Soun
         val eventBeat = event.beat
         val eventWidth = event.width
         val eventEndBeat = eventBeat + eventWidth
+        
+        if (event is AudioEvent) {
+            val msOffset = inputCalibration.audioOffsetMs
+            val actualBeat = atBeat
+            @Suppress("NAME_SHADOWING")
+            val atBeat = tempos.secondsToBeats(tempos.beatsToSeconds(atBeat) - (msOffset / 1000f) * this.playbackSpeed)
+            
+            when (event.audioUpdateCompletion) {
+                Event.UpdateCompletion.PENDING -> {
+                    if (atBeat >= eventEndBeat) {
+                        // Do all three updates and jump to COMPLETED
+                        event.onAudioStart(atBeat, actualBeat)
+                        event.onAudioUpdate(atBeat, actualBeat)
+                        event.onAudioEnd(atBeat, actualBeat)
+                        event.audioUpdateCompletion = Event.UpdateCompletion.COMPLETED
+                    } else if (atBeat > eventBeat) {
+                        // Now inside the event. Call onStart and onUpdate
+                        event.onAudioStart(atBeat, actualBeat)
+                        event.onAudioUpdate(atBeat, actualBeat)
+                        event.audioUpdateCompletion = Event.UpdateCompletion.UPDATING
+                    }
+                }
+                Event.UpdateCompletion.UPDATING -> {
+                    event.onAudioUpdate(atBeat, actualBeat)
+                    if (atBeat >= eventEndBeat) {
+                        event.onAudioEnd(atBeat, actualBeat)
+                        event.audioUpdateCompletion = Event.UpdateCompletion.COMPLETED
+                    }
+                }
+                Event.UpdateCompletion.COMPLETED -> {}
+            }
+        }
+        
         when (event.updateCompletion) {
             Event.UpdateCompletion.PENDING -> {
                 if (atBeat >= eventEndBeat) {
@@ -120,7 +179,7 @@ class Engine(timingProvider: TimingProvider, val world: World, soundSystem: Soun
                     event.updateCompletion = Event.UpdateCompletion.COMPLETED
                 }
             }
-            Event.UpdateCompletion.COMPLETED -> return
+            Event.UpdateCompletion.COMPLETED -> {}
         }
     }
 
@@ -132,11 +191,13 @@ class Engine(timingProvider: TimingProvider, val world: World, soundSystem: Soun
             }
             if (activeTextBox.secondsTimer <= 0f) {
                 if (autoInputs) {
-                    removeActiveTextbox(true)
+                    removeActiveTextbox(unpauseSoundInterface = true, runTextboxOnComplete = true)
                 }
             }
         } else {
-            super.updateSeconds(delta)
+            timerUpdateSeconds.timeInline {
+                super.updateSeconds(delta)
+            }
         }
         
         val currentSeconds = this.seconds
@@ -147,20 +208,26 @@ class Engine(timingProvider: TimingProvider, val world: World, soundSystem: Soun
             toList.forEach { it.run() }
             queuedRunnables.clear()
         }
-        
+
         soundInterface.update(delta)
-        
-        var anyToDelete = false
-        events.forEach { event ->
-            updateEvent(event, currentBeat)
-            if (!anyToDelete && event.updateCompletion == Event.UpdateCompletion.COMPLETED) {
-                anyToDelete = true
+
+        timerUpdateEvents.timeInline {
+            var anyToDelete = false
+            events.forEach { event ->
+                updateEvent(event, currentBeat)
+
+                if (!anyToDelete && event.readyToDelete()) {
+                    anyToDelete = true
+                }
+            }
+            if (anyToDelete && deleteEventsAfterCompletion) {
+                removeEvents(_events.filter { it.readyToDelete() })
             }
         }
-        if (anyToDelete && deleteEventsAfterCompletion) {
-            removeEvents(_events.filter { it.updateCompletion == Event.UpdateCompletion.COMPLETED })
+        
+        timerUpdateWorld.timeInline {
+            world.engineUpdate(this, currentBeat, currentSeconds)
         }
-        world.engineUpdate(this, currentBeat, currentSeconds)
         
         musicData.update()
     }

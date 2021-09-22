@@ -19,7 +19,7 @@ allprojects {
     apply plugin: "java"
     apply plugin: "kotlin"
 
-    version = "1.0.1"
+    version = "1.0.3"
     ext {
         appName = "PolyrhythmMania"
         gdxVersion = '1.10.0'
@@ -70,6 +70,7 @@ allprojects {
         implementation "com.twelvemonkeys.imageio:imageio-tga:$twelvemonkeys_version"
         
 //        implementation "org.openjdk.jol:jol-core:0.15"
+        implementation "io.dropwizard.metrics:metrics-core:4.2.3"
     }
 }
 
