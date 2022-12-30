@@ -1,6 +1,8 @@
 EN: This is not the original Polyrhythm Mania game. This is a WIP Spanish Translation of that. You can find the original [here.](https://github.com/chrislo27/PolyrhythmMania)
+This project is dead, and has been archived. If you would like to continue working on this and finishing this, feel free to! Just be sure to keep my credits in pls and ty :)
 
 ES: Este no es el original Polyrhythm Mania. Esta es una WIP traducción Español de eso. Puedes ver el original [aquí.](https://github.com/chrislo27/PolyrhythmMania)
+Ya no estoy trabajando en esto, y lo he archivado. Si quieres seguir trabajando en esto y terminarlo, ¡siéntete libre de hacerlo! Sólo asegúrese de mantener mis créditos por favor :)
 
 # Polyrhythm Mania
 
